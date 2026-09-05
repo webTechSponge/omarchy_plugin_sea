@@ -43,3 +43,7 @@ The published source currently advertises a ten-minute HTTP cache lifetime; poll
 ## Full-size preview viewer
 
 Detail previews open a modal native `ImageViewer` with fit-to-window, native dimensions, zoom and a scrollable/draggable image. The underlying page is disabled while the viewer is open; Escape/Close restores focus to the preview without changing search or selection. `PreviewImage.fullResolution` requests `oma-plug-sea-preview URL original`, which uses a separate `-original.png` cache entry and preserves dimensions instead of applying the 1200-pixel thumbnail limit. All input, allocation, dimension, process and output-file limits still apply; oversized or failed images display an error rather than bypassing the decoder boundary. Full-size animation previews still show the first frame.
+
+## Application branding
+
+The approved version 3 artwork lives in `assets/branding/`. The browse header displays the PluginSea wordmark; detail pages show the matching wave-and-plug icon. Both expose the accessible name Omarchy Plugin Sea, and the header retains a text fallback if the wordmark cannot load. Existing manifest, commands and storage identifiers are unchanged. The development installer ships only the approved PNG pair; earlier design iterations and generation notes remain in the source repository.

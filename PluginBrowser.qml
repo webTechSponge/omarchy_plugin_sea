@@ -280,9 +280,24 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
                         Ui.Button { visible: !!root.detail; text: "← Back"; focusable: true; bordered: true; onClicked: root.back() }
+                        Image {
+                            visible: !!root.detail
+                            Layout.preferredWidth: 42; Layout.preferredHeight: 42
+                            source: Qt.resolvedUrl("assets/branding/icon-pluginsea-v3.png")
+                            sourceSize: Qt.size(84, 84); fillMode: Image.PreserveAspectFit
+                            Accessible.role: Accessible.Graphic; Accessible.name: "Omarchy Plugin Sea"
+                        }
                         ColumnLayout {
                             Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 4
-                            Text { Layout.fillWidth: true; text: root.detail ? root.detail.name : "Omarchy Plugin Sea"; textFormat: Text.PlainText; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title + 4; font.bold: true; elide: Text.ElideRight }
+                            Image {
+                                id: brandWordmark; visible: !root.detail && status !== Image.Error
+                                Layout.fillWidth: true; Layout.preferredHeight: Math.min(surface.height < 600 ? 60 : 92, width / 3)
+                                source: Qt.resolvedUrl("assets/branding/wordmark-pluginsea-v3.png")
+                                sourceSize.width: 1000; fillMode: Image.PreserveAspectFit
+                                horizontalAlignment: Image.AlignLeft
+                                Accessible.role: Accessible.Graphic; Accessible.name: "Omarchy Plugin Sea"
+                            }
+                            Text { visible: !!root.detail || brandWordmark.status === Image.Error; Layout.fillWidth: true; text: root.detail ? root.detail.name : "Omarchy Plugin Sea"; textFormat: Text.PlainText; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title + 4; font.bold: true; elide: Text.ElideRight }
                             Text { Layout.fillWidth: true; elide: Text.ElideRight; text: root.detail ? root.detail.id : "Discover community plugins for your desktop"; textFormat: Text.PlainText; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         }
                         Ui.Button {

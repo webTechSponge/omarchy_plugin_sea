@@ -21,6 +21,10 @@ trap 'rm -rf -- "$stage"' EXIT
 for part in manifest.json PluginBrowser.qml components js bin lib; do
   [[ ! -e $project/$part ]] || cp -a -- "$project/$part" "$stage/"
 done
+mkdir -p "$stage/assets/branding"
+for asset in wordmark-pluginsea-v3.png icon-pluginsea-v3.png; do
+  cp -- "$project/assets/branding/$asset" "$stage/assets/branding/$asset"
+done
 rm -f -- "$stage/lib/.preview-decode.lock" "$stage/lib/preview-decode.build-id"
 printf '%s\n' "$project" > "$stage/.oma-plug-sea-managed"
 omarchy plugin validate "$stage"

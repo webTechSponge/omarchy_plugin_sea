@@ -73,6 +73,9 @@ cp "$test_home/.config/omarchy/shell.json" "$test_root/original-shell"
 run dev-install || fail 'first install'
 [[ -f $test_home/.config/omarchy/plugins/local.oma-plug-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
 [[ -x $test_home/.local/bin/oma-plug-sea ]] || fail 'launcher not executable'
+for asset in wordmark-pluginsea-v3.png icon-pluginsea-v3.png; do
+  cmp -s "$project/assets/branding/$asset" "$test_home/.config/omarchy/plugins/local.oma-plug-sea/assets/branding/$asset" || fail 'branding asset missing or changed in installed copy'
+done
 installed_lib=$test_home/.config/omarchy/plugins/local.oma-plug-sea/lib
 [[ -x $installed_lib/preview-decode ]] || fail 'native preview decoder not installed'
 "$installed_lib/preview-decode" --check || fail 'installed preview codec check'
