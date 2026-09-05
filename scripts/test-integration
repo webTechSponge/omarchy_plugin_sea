@@ -73,6 +73,10 @@ cp "$test_home/.config/omarchy/shell.json" "$test_root/original-shell"
 run dev-install || fail 'first install'
 [[ -f $test_home/.config/omarchy/plugins/local.oma-plug-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
 [[ -x $test_home/.local/bin/oma-plug-sea ]] || fail 'launcher not executable'
+installed_lib=$test_home/.config/omarchy/plugins/local.oma-plug-sea/lib
+[[ -x $installed_lib/preview-decode ]] || fail 'native preview decoder not installed'
+"$installed_lib/preview-decode" --check || fail 'installed preview codec check'
+[[ ! -e $installed_lib/.preview-decode.lock && ! -e $installed_lib/preview-decode.build-id ]] || fail 'build state leaked into runtime copy'
 [[ $(rg -c '"setup.plugin.browse"' "$menu") == 1 ]] || fail 'Browse entry count'
 cp "$menu" "$test_root/installed-menu"
 run dev-install || fail 'idempotent install'

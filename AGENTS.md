@@ -3,7 +3,7 @@
 Read README.md and docs/architecture.md for product requirements; PROMPT.md, when present, is a local session brief. Use the Omarchy skill before user desktop integration. Never edit /usr/share/omarchy. Publish or push only when explicitly requested.
 
 - Native Quickshell overlay, id `local.oma-plug-sea`, hosted by existing omarchy-shell.
-- UI: PluginBrowser.qml, components/, js/. Helpers: bin/, lib/. Bash + curl/jq, no additional runtime.
+- UI: PluginBrowser.qml, components/, js/. Helpers: bin/, lib/. Bash + curl/jq and a native Qt6 preview decoder; `qt6-imageformats` required. `scripts/build-preview` builds the decoder with g++/pkg-config during mise setup/check; generated binaries stay untracked.
 - `mise trust && mise run setup`; `mise run check`; `mise run install`; `mise run open`; `mise run smoke`.
 - Development installation copies runtime files (manifest validator rejects symlinks). Re-run install after edits.
 - User changes require timestamped backups, preserved JSONC menu entries, and supported plugin IPC/CLI.

@@ -10,6 +10,8 @@ ColumnLayout {
     required property var plugin
     property bool busy: false
     signal actionRequested(string action)
+    signal previewRequested(string source)
+    function focusPreview() { previewTarget.forceActiveFocus(); }
     spacing: 14
     Controls.ScrollView {
         Layout.fillWidth: true; Layout.fillHeight: true
@@ -18,9 +20,28 @@ ColumnLayout {
         Column {
             width: parent.width; spacing: 14
             Rectangle {
+                id: previewTarget
                 width: parent.width; height: Math.min(230, width * 0.31); color: Util.alpha(Color.accent, 0.07); clip: true
+                activeFocusOnTab: detailPreview.ready
+                border.width: activeFocus || previewMouse.containsMouse ? 2 : 0
+                border.color: Color.accent
+                function activate() { if (detailPreview.ready) detail.previewRequested(detailPreview.source); }
+                Keys.onReturnPressed: activate()
+                Keys.onEnterPressed: activate()
+                Keys.onSpacePressed: activate()
                 Text { anchors.centerIn: parent; visible: !detailPreview.ready; text: "No preview available"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family }
                 PreviewImage { id: detailPreview; anchors.fill: parent; source: detail.plugin.previewImage || detail.plugin.previewThumbnail || ""; fillMode: Image.PreserveAspectFit; requestedWidth: 1200 }
+                Rectangle {
+                    anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
+                    width: previewHint.implicitWidth + 16; height: previewHint.implicitHeight + 10
+                    visible: detailPreview.ready; color: Util.alpha(Color.menu.background, 0.9)
+                    Text { id: previewHint; anchors.centerIn: parent; text: "⤢ View full size"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                }
+                MouseArea {
+                    id: previewMouse; anchors.fill: parent; enabled: detailPreview.ready
+                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: { previewTarget.forceActiveFocus(); previewTarget.activate(); }
+                }
             }
             Text { width: parent.width; text: detail.plugin.description || "No description provided."; textFormat: Text.PlainText; wrapMode: Text.WordWrap; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading }
             Text { width: parent.width; text: "PLUGIN ID   " + detail.plugin.id + "\nPUBLISHER   " + (detail.plugin.author || "Not provided") + "\nVERSION   " + (detail.plugin.version || "Not provided") + (detail.plugin.local ? "  ·  installed " + (detail.plugin.local.version || "unknown") : "") + "\nCATEGORY   " + (detail.plugin.category || "Community") + "\nTAGS   " + (detail.plugin.tags || []).join(", ") + "\nSOURCE TYPE   " + (detail.plugin.sourceType || "Local") + "\nSTARS   " + (detail.plugin.stars || 0) + "\nLISTED   " + (detail.plugin.listedAt || "Not reported") + (detail.plugin.local ? "\nPLUGIN KINDS   " + (detail.plugin.local.kinds || []).join(", ") + "\nLOCAL DIRECTORY   " + (detail.plugin.local.localPath || "Not reported") : "") + "\nSTATE   " + Catalog.status(detail.plugin) + "\nSOURCE   " + (detail.plugin.repo || "No repository provided"); textFormat: Text.PlainText; wrapMode: Text.WrapAnywhere; color: Color.foreground; opacity: 0.75; font.family: Style.font.family; font.pixelSize: Style.font.body; lineHeight: 1.5 }

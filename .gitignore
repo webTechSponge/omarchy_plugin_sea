@@ -2,6 +2,10 @@
 *.log
 .cache/
 artifacts/
+lib/preview-decode
+lib/preview-decode.build-id
+lib/.preview-decode.*
+lib/.preview-decode-build.*/
 
 # Local execution brief; not part of the published plugin.
 PROMPT.md

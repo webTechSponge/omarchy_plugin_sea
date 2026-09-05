@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
+scripts/build-preview
+lib/preview-decode --check
 omarchy plugin validate .
 for file in bin/* scripts/* tests/*.sh; do
   [[ -f $file ]] || continue

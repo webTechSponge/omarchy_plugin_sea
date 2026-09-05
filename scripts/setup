@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-for tool in bash curl jq git flock timeout omarchy omarchy-shell quickshell qmllint perl magick; do
+for tool in bash curl jq git flock prlimit timeout omarchy omarchy-shell quickshell qmllint perl; do
   command -v "$tool" >/dev/null || { echo "Missing required system tool: $tool" >&2; exit 1; }
 done
+project=$(cd -- "$(dirname -- "$0")/.." && pwd)
+"$project/scripts/build-preview"
+"$project/lib/preview-decode" --check
 printf 'Native dependencies available. '
 omarchy-shell shell ping

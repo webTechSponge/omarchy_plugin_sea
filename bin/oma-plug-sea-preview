@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# Convert marketplace WebP previews when the host Qt lacks its optional decoder.
+# Decode marketplace WebP previews outside the desktop shell process.
 set -euo pipefail
 url=${1:-}
 reply() { jq -n --argjson ok "$1" --arg path "$2" --arg error "$3" '{ok:$ok,path:$path,error:$error}'; exit 0; }
-[[ $# == 1 && $url =~ ^https://plugins\.omarchy\.org/assets/img/plugins/[A-Za-z0-9._-]+\.webp$ && $url != *..* ]] || reply false '' 'Unsupported preview URL.'
-command -v magick >/dev/null || reply false '' 'ImageMagick is needed to display WebP previews on this Qt installation.'
+[[ ( $# == 1 || ( $# == 2 && ${2:-} == original ) ) ]] || reply false '' 'Usage: oma-plug-sea-preview URL [original].'
+[[ $url =~ ^https://plugins\.omarchy\.org/assets/img/plugins/[A-Za-z0-9._-]+\.webp$ && $url != *..* ]] || reply false '' 'Unsupported preview URL.'
+decoder=$(cd -- "$(dirname -- "$0")/../lib" && pwd)/preview-decode
 umask 077
 cache=${XDG_CACHE_HOME:-$HOME/.cache}/oma_plug_sea/previews
 mkdir -p "$cache"
 key=$(printf '%s' "$url" | sha256sum)
 key=${key%% *}
+decoder_options=()
+if [[ ${2:-} == original ]]; then
+  key+=-original
+  decoder_options=(--original)
+fi
 target="$cache/$key.png"
 [[ ! -s $target ]] || reply true "$target" ''
+[[ -x $decoder ]] || reply false '' 'Preview decoder is missing. Run mise run setup and reinstall the plugin.'
 exec 9>"$cache/$key.lock"
 flock -w 45 9 || reply false '' 'Another preview conversion is still running.'
 [[ ! -s $target ]] || reply true "$target" ''
@@ -23,7 +30,7 @@ if ! curl --fail --silent --show-error --proto '=https' --connect-timeout 5 --ma
 fi
 # Explicit decoder, first frame and output format prevent image pseudo-protocols.
 # Resource limits and a process timeout bound malformed/decompression-heavy input.
-if ! timeout --kill-after=2 20 magick -limit thread 1 -limit memory 64MiB -limit map 128MiB -limit disk 128MiB -limit width 8192 -limit height 8192 -limit time 15 -define "registry:temporary-path=$tmp" "WEBP:$tmp/image.webp[0]" -resize '1200x1200>' -strip "PNG:$tmp/image.png" 2>"$tmp/errors"; then
+if ! timeout --kill-after=2 20 prlimit --as=536870912 --cpu=15 --fsize=16777216 --core=0 -- "$decoder" "$tmp/image.webp" "$tmp/image.png" "${decoder_options[@]}" 2>"$tmp/errors"; then
   reply false '' "Preview conversion failed: $(head -c 1000 "$tmp/errors")"
 fi
 [[ -s $tmp/image.png ]] || reply false '' 'Preview conversion produced no image.'

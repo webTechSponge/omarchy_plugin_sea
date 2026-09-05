@@ -22,7 +22,9 @@ Browse metadata never supplies a command. Sources are normalized canonical HTTPS
 
 Actions serialize with `flock`, time out, back up existing shell.json, and verify post-action state. Install-and-enable performs disabled installation first, confirms the expected ID, then enables. A changed manifest ID fails confirmation and leaves the unexpected disabled checkout for inspection. Actions never claim success based solely on CLI stdout. The browser refuses to mutate itself so it cannot tear down its own in-flight process; use development uninstall tooling.
 
-Before installing, dormant configured IDs that are absent from discovery cause a refusal: an unexpected cloned ID matching such a reference could otherwise auto-enable. The helper does not silently remove those references. WebP previews use a strict fixed-origin fetch/conversion helper, with bounded network and ImageMagick resources, first-frame-only decoding and an atomic PNG cache; this avoids depending on an optional Qt decoder.
+Before installing, dormant configured IDs that are absent from discovery cause a refusal: an unexpected cloned ID matching such a reference could otherwise auto-enable. The helper does not silently remove those references.
+
+WebP previews use a strict fixed-origin curl fetch and a separate native Qt6 decoder (`lib/preview-decode.cpp`, built by `scripts/build-preview`). `qt6-imageformats` supplies WebP support; the shell receives only an atomic cached PNG. Input is limited to 8 MiB, dimensions to 8192 per side, Qt image allocation to 64 MiB, output to 1200 per side without upscaling, and only the first animation frame is decoded. Fresh output pixels discard source metadata. The wrapper imposes a 20-second wall timeout, 15-second CPU limit, 512 MiB address-space limit, 16 MiB output-file limit and disables core dumps. These are resource limits, not a sandbox. Existing cached previews work without redecoding. No ImageMagick executable or library is used.
 
 The backend's lock coordinates its own actions, not unrelated terminal commands. Concurrent external changes can therefore fail a postcondition; the UI retains diagnostics and refreshes local state. No security audit or signed verification is claimed. Official signed installation must be delegated to a real official client when deployed, not reimplemented from aspirational API specifications.
 
@@ -37,3 +39,7 @@ The backend's lock coordinates its own actions, not unrelated terminal commands.
 The UI checks on reopen and every five minutes while visible. Its initial empty load refreshes first. A detected change highlights **Refresh available**; only explicit refresh applies new rows. Polling, refreshes and mutations are serialized, with generation checks preventing obsolete poll results from overriding a refresh. Previously detected changes remain indicated if a later poll fails.
 
 The published source currently advertises a ten-minute HTTP cache lifetime; polling reports the version served by that source/CDN.
+
+## Full-size preview viewer
+
+Detail previews open a modal native `ImageViewer` with fit-to-window, native dimensions, zoom and a scrollable/draggable image. The underlying page is disabled while the viewer is open; Escape/Close restores focus to the preview without changing search or selection. `PreviewImage.fullResolution` requests `oma-plug-sea-preview URL original`, which uses a separate `-original.png` cache entry and preserves dimensions instead of applying the 1200-pixel thumbnail limit. All input, allocation, dimension, process and output-file limits still apply; oversized or failed images display an error rather than bypassing the decoder boundary. Full-size animation previews still show the first frame.

@@ -22,6 +22,16 @@ Item {
     property var rows: []
     property var filtered: []
     property var detail: null
+    property string previewSource: ""
+    function showPreview(source) {
+        if (!Catalog.safeLink(source)) return;
+        previewSource = source;
+        Qt.callLater(function() { if (imageViewer.item) imageViewer.item.forceActiveFocus(); });
+    }
+    function closePreview() {
+        previewSource = "";
+        Qt.callLater(function() { pluginDetails.focusPreview(); });
+    }
     property string query: ""
     property string category: "All categories"
     property string scope: "All plugins"
@@ -58,16 +68,18 @@ Item {
             checkAfterRefresh = true;
             refresh();
         }
-        Qt.callLater(function() { if (root.detail) mainFocus.forceActiveFocus(); else search.forceActiveFocus(); });
+        Qt.callLater(function() { if (root.previewSource && imageViewer.item) imageViewer.item.forceActiveFocus(); else if (root.detail) mainFocus.forceActiveFocus(); else search.forceActiveFocus(); });
     }
-    function status(arg) { return JSON.stringify({opened:opened, search:query, category:category, scope:scope, sort:sort, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
-    function close() { opened = false; }
+    function status(arg) { return JSON.stringify({opened:opened, search:query, category:category, scope:scope, sort:sort, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
+    function close() { previewSource = ""; opened = false; }
     function dismiss() {
         if (busy) { operationMessage = "Please wait for the current action to finish."; return; }
+        previewSource = "";
         opened = false;
         if (shell) shell.hide(manifest ? manifest.id : "local.oma-plug-sea");
     }
     function back() {
+        if (previewSource) { closePreview(); return; }
         if (pendingAction || diagnosticVisible) { cancelModal(); return; }
         if (detail) { detail = null; Qt.callLater(function() { grid.forceActiveFocus(); }); }
         else if (search.text) search.text = "";
@@ -79,7 +91,7 @@ Item {
         Qt.callLater(function() { mainFocus.forceActiveFocus(); });
     }
     onDetailChanged: {
-        if (detail && opened && !pendingAction) Qt.callLater(function() { mainFocus.forceActiveFocus(); });
+        if (detail && opened && !pendingAction && !previewSource) Qt.callLater(function() { mainFocus.forceActiveFocus(); });
     }
     function parseResult(output, fallback) {
         try { return JSON.parse(output); }
@@ -257,7 +269,7 @@ Item {
             FocusScope {
                 id: mainFocus
                 anchors.fill: parent; anchors.margins: 24
-                enabled: !root.pendingAction && !root.diagnosticVisible
+                enabled: !root.pendingAction && !root.diagnosticVisible && !root.previewSource
                 Keys.onEscapePressed: root.back()
                 Keys.onPressed: function(event) {
                     if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_F) { root.detail = null; search.forceActiveFocus(); event.accepted = true; }
@@ -320,7 +332,12 @@ Item {
                         }
                         Text { anchors.centerIn: parent; visible: root.filtered.length === 0; width: Math.min(parent.width - 32, 430); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: catalogProcess.running ? "Finding community plugins…" : root.catalogError && !root.catalog.length ? "The catalog is unavailable. Refresh to retry. Installed plugins remain available through the Installed filter." : "No plugins match your filters.\nTry another search or category."; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.heading }
                     }
-                    PluginDetails { visible: !!root.detail; Layout.fillWidth: true; Layout.fillHeight: true; plugin: root.detail || ({}); busy: root.busy || root.refreshing || root.checking || !!root.localError; onActionRequested: function(action) { root.requestAction(action); } }
+                    PluginDetails {
+                        id: pluginDetails; visible: !!root.detail; Layout.fillWidth: true; Layout.fillHeight: true
+                        plugin: root.detail || ({}); busy: root.busy || root.refreshing || root.checking || !!root.localError
+                        onActionRequested: function(action) { root.requestAction(action); }
+                        onPreviewRequested: function(source) { root.showPreview(source); }
+                    }
                     RowLayout {
                         visible: !!root.operationMessage; Layout.fillWidth: true
                         Controls.BusyIndicator { visible: root.busy; running: root.busy; Layout.preferredWidth: 26; Layout.preferredHeight: 26 }
@@ -329,6 +346,14 @@ Item {
                     }
                     Text { Layout.fillWidth: true; text: "Browse safely. Review source before enabling unsandboxed community code.   ·   Ctrl+F search   F5 refresh   Esc back"; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.45; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                 }
+            }
+            Loader {
+                id: imageViewer; anchors.fill: parent; active: root.opened && !!root.previewSource
+                sourceComponent: ImageViewer {
+                    source: root.previewSource; title: root.detail ? root.detail.name : "Preview"
+                    onClosed: root.closePreview()
+                }
+                onLoaded: item.forceActiveFocus()
             }
             Rectangle {
                 anchors.fill: parent; visible: !!root.pendingAction || root.diagnosticVisible; color: Util.alpha(Color.menu.background, 1)

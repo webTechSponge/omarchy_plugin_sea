@@ -17,7 +17,13 @@ The repository directory is `omarchy_plugin_sea` and the visible application nam
 
 ## Requirements and setup
 
-Omarchy with the current plugin CLI, a running Quickshell shell, Bash, curl, jq, Git, util-linux (`flock`), coreutils (`timeout`), Perl, and Qt6. ImageMagick (`magick`, already shipped on the tested desktop) provides a bounded cached WebP-to-PNG preview path on systems missing Qt's WebP decoder. No Python, Node, database, or web framework is required. Developer checks use `qmllint` and the Qt6 QML runner.
+Omarchy with the current plugin CLI, a running Quickshell shell, Bash, curl, jq, Git, util-linux (`flock`, `prlimit`), coreutils (`timeout`), Perl, and Qt6 with `qt6-imageformats` for WebP previews. A small native Qt helper decodes previews in a separate process and caches PNGs. ImageMagick is not required. No Python, Node, database, or web framework is required. Building from source needs `g++`, `pkg-config` and Qt6 development files (`gcc`, `pkgconf`, `qt6-base` on Arch). Developer checks also use `qmllint`, the Qt6 QML runner and `libwebp` fixture APIs.
+
+Install missing native dependencies from a terminal:
+
+```bash
+omarchy pkg add qt6-imageformats gcc pkgconf qt6-base
+```
 
 Use mise for the project environment and commands:
 
@@ -30,7 +36,7 @@ mise run install
 mise run open
 ```
 
-`mise.toml` intentionally uses the system's matching Qt/Omarchy runtime instead of downloading a conflicting language stack. Setup checks native dependencies. The development installer copies the runtime files into `~/.config/omarchy/plugins/local.oma-plug-sea`, creates `~/.local/bin/oma-plug-sea`, and adds one marked `setup.plugin.browse` property to the supported menu extension. It preserves other entries and comments, refuses unowned targets and symlinks, and backs up existing files under `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea/` before changes. No files under `/usr/share/omarchy` are edited.
+`mise.toml` intentionally uses the system's matching Qt/Omarchy runtime instead of downloading a conflicting language stack. Setup builds the native preview helper and checks decoder support and native dependencies. The development installer copies the runtime files into `~/.config/omarchy/plugins/local.oma-plug-sea`, creates `~/.local/bin/oma-plug-sea`, and adds one marked `setup.plugin.browse` property to the supported menu extension. It preserves other entries and comments, refuses unowned targets and symlinks, and backs up existing files under `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea/` before changes. No files under `/usr/share/omarchy` are edited.
 
 Re-run `mise run install` after source changes. Omarchy validates against symlinks, so this uses a copy rather than a development symlink. If Quickshell retains a stale imported component after editing QML, run `omarchy restart shell` once and reopen. The installed host currently hardcodes `~/.config/omarchy`; cache and state storage honor XDG variables.
 
@@ -41,6 +47,7 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 - Down from search moves to cards; arrows navigate, Enter/Space open details. Click a card for the same view.
 - Tab moves between controls. Ctrl+F returns to search; F5 refreshes. Escape cancels consent, returns from details, clears search, then closes.
 - Details show source, preview or fallback, local version/state, upstream checks and exact review/observed commits when supplied.
+- Click a detail preview (or focus it and press Enter/Space) to open the original-resolution viewer. Use Fit, 100%, zoom controls and scrolling/dragging to inspect it; Escape returns to the same detail page. Original images keep the existing download and decoder safety limits, with a separate cache from card previews.
 - Install defaults to disabled. Install & enable is a separate explicit choice. Enable, disable, update and removal appear according to local state.
 - Operations show progress, capture stdout/stderr in Diagnostics, prevent conflicting actions, and confirm local state before reporting success.
 
