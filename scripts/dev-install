@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname -- "$0")/integration-common"
+"$project/scripts/setup"
+omarchy plugin validate "$project"
+if [[ -f $menu_file ]]; then
+  perl -0777 -ne 'exit(/\A(?:\s|\/\/[^\n]*\n|\/\*.*?\*\/)*\{/s ? 0 : 1)' "$menu_file" || { echo 'Expected a JSONC root object in menu extension.' >&2; exit 1; }
+fi
+if [[ -e $plugin_dir && ! -f $plugin_dir/.oma-plug-sea-managed ]]; then
+  echo "Refusing to overwrite unowned plugin: $plugin_dir" >&2; exit 1
+fi
+if [[ -e $launcher ]] && ! grep -q '^# oma-plug-sea managed launcher$' "$launcher"; then
+  echo "Refusing to overwrite unowned launcher: $launcher" >&2; exit 1
+fi
+if [[ -f $menu_file ]] && grep -q '"setup.plugin.browse"' "$menu_file" && ! grep -q '// BEGIN oma_plug_sea' "$menu_file"; then
+  echo 'The Browse menu ID is already owned by another extension.' >&2; exit 1
+fi
+mkdir -p "$(dirname "$plugin_dir")" "$(dirname "$menu_file")" "$(dirname "$launcher")" "$state_home"
+stage=$(mktemp -d "$(dirname "$plugin_dir")/.oma-plug-sea-stage.XXXXXX")
+trap 'rm -rf -- "$stage"' EXIT
+for part in manifest.json PluginBrowser.qml components js bin lib; do
+  [[ ! -e $project/$part ]] || cp -a -- "$project/$part" "$stage/"
+done
+printf '%s\n' "$project" > "$stage/.oma-plug-sea-managed"
+omarchy plugin validate "$stage"
+backup "$config_home/omarchy/shell.json"
+if [[ -d $plugin_dir ]]; then
+  mv -- "$plugin_dir" "$state_home/previous-plugin.$(date +%Y%m%dT%H%M%S%N)"
+fi
+mv -- "$stage" "$plugin_dir"
+backup "$launcher"
+cat > "$launcher" <<'LAUNCH'
+#!/usr/bin/env bash
+# oma-plug-sea managed launcher
+exec "$HOME/.config/omarchy/plugins/local.oma-plug-sea/bin/oma-plug-sea" "$@"
+LAUNCH
+chmod +x "$launcher"
+if [[ ! -f $menu_file ]]; then printf '{\n}\n' > "$menu_file"; fi
+if ! grep -q '// BEGIN oma_plug_sea' "$menu_file"; then
+  backup "$menu_file"
+  # Insert a self-contained JSONC property; preserve every existing byte after {.
+  perl -0777 -i -pe 's/\A((?:\s|\/\/[^\n]*\n|\/\*.*?\*\/)*\{)/$1\n  \/\/ BEGIN oma_plug_sea\n  "setup.plugin.browse": {"label":"Browse","icon":"󰐱","description":"Browse community plugins with Omarchy Plugin Sea","action":"omarchy-shell shell summon local.oma-plug-sea '\''{}'\''"},\n  \/\/ END oma_plug_sea/s or die "Expected a JSONC root object; restore menu backup if needed\n"' "$menu_file"
+fi
+omarchy-shell shell rescanPlugins
+wait_for_plugin 'any(.[]; .id == "local.oma-plug-sea")'
+omarchy plugin enable local.oma-plug-sea
+wait_for_plugin 'any(.[]; .id == "local.oma-plug-sea" and .enabled)'
+printf 'Installed. Open: oma-plug-sea (or Setup → Plugins → Browse). Backups: %s/backups\n' "$state_home"

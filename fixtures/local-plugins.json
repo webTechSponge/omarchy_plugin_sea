@@ -1,0 +1,5 @@
+[
+  {"id":"test.weather","name":"Weather","enabled":false,"active":false,"firstParty":false,"canDisable":true,"kinds":["bar-widget"]},
+  {"id":"test.local-only","name":"Local helper","enabled":true,"active":true,"firstParty":false,"canDisable":true,"kinds":["overlay"]},
+  {"id":"omarchy.clock","name":"Clock","enabled":true,"active":true,"firstParty":true,"canDisable":true,"kinds":["bar-widget"]}
+]

@@ -1,0 +1,7 @@
+.mise.local.toml
+*.log
+.cache/
+artifacts/
+
+# Local execution brief; not part of the published plugin.
+PROMPT.md

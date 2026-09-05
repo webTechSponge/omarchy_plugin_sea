@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Sourced by project integration scripts.
+set -euo pipefail
+project=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+config_home=$HOME/.config
+state_home=${XDG_STATE_HOME:-$HOME/.local/state}/oma_plug_sea
+plugin_dir=$config_home/omarchy/plugins/local.oma-plug-sea
+menu_file=$config_home/omarchy/extensions/omarchy-menu.jsonc
+launcher=${XDG_BIN_HOME:-$HOME/.local/bin}/oma-plug-sea
+mkdir -p "$state_home"
+exec 8>"$state_home/integration.lock"
+flock -n 8 || { echo 'Another integration operation is running.' >&2; exit 1; }
+for path in "$plugin_dir" "$menu_file" "$launcher"; do
+  [[ ! -L $path ]] || { echo "Refusing symlink integration target: $path" >&2; exit 1; }
+done
+wait_for_plugin() {
+  local predicate=$1
+  for ((attempt=0; attempt<40; attempt++)); do
+    if omarchy plugin list --json | jq -e "$predicate" >/dev/null; then return 0; fi
+    sleep 0.25
+  done
+  echo 'Timed out waiting for the shell plugin registry.' >&2; return 1
+}
+backup() {
+  if [[ -e $1 ]]; then
+    mkdir -p "$state_home/backups"
+    cp -p -- "$1" "$state_home/backups/$(basename "$1").$(date +%Y%m%dT%H%M%S%N)"
+  fi
+}

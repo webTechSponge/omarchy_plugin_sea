@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+mapfile -t files < <(find . -name .git -prune -o -name artifacts -prune -o -name '*.qml' -print)
+qmllint "${files[@]}"
+if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
+  lint_root=$(mktemp -d)
+  trap '[[ ! -L $lint_root/qs ]] || unlink "$lint_root/qs"; rm -f "$lint_root/result"; rmdir "$lint_root"' EXIT
+  ln -s "${OMARCHY_PATH:-/usr/share/omarchy}/shell" "$lint_root/qs"
+  if ! /usr/lib/qt6/bin/qmllint -I "$lint_root" "${files[@]}" >"$lint_root/result" 2>&1; then cat "$lint_root/result"; exit 1; fi
+  printf 'Qt6 static analysis passed (%s advisory warnings for host/dynamic types; real shell smoke verifies runtime).\n' "$(grep -c '^Warning:' "$lint_root/result" || true)"
+fi

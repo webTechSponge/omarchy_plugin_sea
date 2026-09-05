@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+action=${1:-}; id=${2:-}; source_url=""; consent=""
+shift "$(( $# >= 2 ? 2 : $# ))"
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+: >"$tmp/stdout"; : >"$tmp/stderr"; printf '[]' >"$tmp/plugins"
+finish() {
+  local ok=$1 error=$2
+  jq -n --argjson ok "$ok" --arg action "$action" --arg id "$id" --arg error "$error" --rawfile stdout "$tmp/stdout" --rawfile stderr "$tmp/stderr" --slurpfile plugins "$tmp/plugins" '{ok:$ok,action:$action,id:$id,error:$error,stdout:$stdout,stderr:$stderr,plugins:$plugins[0]}'
+  exit 0
+}
+valid_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ && $1 != *..* ]]; }
+[[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || finish false 'Invalid plugin ID.'
+[[ $id != local.oma-plug-sea ]] || finish false 'Manage Omarchy Plugin Sea using its documented development uninstall command.'
+case $action in
+  install|install-enable) [[ $# == 2 ]] || finish false 'Installation requires an exact source and explicit consent.'; source_url=$1; consent=$2; valid_url "$source_url" || finish false 'Only canonical HTTPS GitHub repositories are supported.' ;;
+  enable|update|remove) [[ $# == 1 ]] || finish false 'This action requires explicit confirmation.'; consent=$1 ;;
+  disable) [[ $# == 0 ]] || finish false 'Unexpected action arguments.' ;;
+  *) finish false 'Unsupported plugin action.' ;;
+esac
+case $action in
+  install|install-enable|enable|update) [[ $consent == --consent-unsandboxed ]] || finish false 'Explicit consent to unsandboxed code is required.' ;;
+  remove) [[ $consent == --confirm-remove ]] || finish false 'Explicit removal confirmation is required.' ;;
+esac
+umask 077
+state=${XDG_STATE_HOME:-$HOME/.local/state}/oma_plug_sea
+mkdir -p "$state"
+exec 9>"$state/action.lock"
+flock -n 9 || finish false 'Another plugin action is running. Wait for it to finish.'
+refresh_local() {
+  "$ROOT/bin/oma-plug-sea-local" >"$tmp/state"
+  jq -e '.ok==true' "$tmp/state" >/dev/null || return 1
+  jq '.plugins' "$tmp/state" >"$tmp/plugins"
+}
+refresh_local || finish false 'Cannot inspect plugin state; ensure omarchy-shell is running.'
+installed=$(jq -c --arg id "$id" '[.[]|select(.id==$id)][0]//null' "$tmp/plugins")
+case $action in
+install|install-enable)
+  [[ $installed == null ]] || finish false 'This plugin is already installed.'
+  [[ $id != omarchy.* ]] || finish false 'The omarchy namespace is reserved.'
+  # The CLI rescans immediately after cloning. A dormant configuration reference
+  # could otherwise activate even an unexpected mutable-HEAD manifest ID.
+  if [[ -f $HOME/.config/omarchy/shell.json ]]; then
+    if ! jq -e --slurpfile installed "$tmp/plugins" '
+      def entry: if type=="object" then .id else . end;
+      [(.plugins // [])[] | entry] +
+      [(.bar.layout // {} | .left // [], .center // [], .right // [])[] | entry] +
+      [(.bar.id // "")] |
+      map(select(type=="string" and .!="" and (startswith("omarchy.")|not))) |
+      all(.[]; . as $id | any($installed[0][]; .id==$id))
+    ' "$HOME/.config/omarchy/shell.json" >/dev/null 2>>"$tmp/stderr"; then
+      finish false 'Installation paused: shell.json contains an undiscovered plugin reference or unreadable configuration. Remove stale references before installing, so newly cloned code cannot auto-enable.'
+    fi
+  fi
+  # Recheck presentation availability; it does not confer code authenticity.
+  "$ROOT/bin/oma-plug-sea-catalog" cached >"$tmp/catalog"
+  jq -e --arg id "$id" --arg repo "${source_url%/}" 'any(.plugins[]; .id==$id and .repo==$repo and .installAvailable==true)' "$tmp/catalog" >/dev/null || finish false 'This listing is not currently installable from the selected source. Refresh the catalog.'
+  ;;
+*)
+  [[ $installed != null ]] || finish false 'The plugin disappeared or is not installed. Refresh local state.'
+  if [[ $action == update || $action == remove ]]; then
+    jq -e '.firstParty==false' <<<"$installed" >/dev/null || finish false 'Packaged plugins cannot be updated or removed here.'
+    [[ -e $HOME/.config/omarchy/plugins/$id || -L $HOME/.config/omarchy/plugins/$id ]] || finish false 'The local plugin directory no longer exists.'
+  fi
+  [[ $action != disable ]] || { jq -e '.canDisable!=false' <<<"$installed" >/dev/null || finish false 'The shell does not allow disabling this plugin.'; }
+  if [[ $action == update ]]; then
+    jq -e '.gitManaged==true' <<<"$installed" >/dev/null || finish false 'Only Git-managed installations can be updated.'
+    source_url=$(jq -r '.repo' <<<"$installed")
+    valid_url "$source_url" || finish false 'Update refused: the local Git origin is not a supported HTTPS repository.'
+  fi
+  ;;
+esac
+# Preserve an existing shell configuration before every mutation, including failures.
+if [[ -f $HOME/.config/omarchy/shell.json ]]; then
+  backup=$(mktemp "$state/shell.json.$(date -u +%Y%m%dT%H%M%S).XXXXXX")
+  cp -p -- "$HOME/.config/omarchy/shell.json" "$backup" || finish false 'Could not back up shell configuration.'
+fi
+run() { timeout --kill-after=5 120 "$@" >>"$tmp/stdout" 2>>"$tmp/stderr"; }
+enable_plugin() {
+  local section
+  section=$(jq -r --arg id "$id" '.[]|select(.id==$id)|.defaultSection' "$tmp/plugins")
+  if jq -e --arg id "$id" 'any(.[]; .id==$id and (.kinds|index("bar-widget"))!=null and (.kinds|index("bar"))==null)' "$tmp/plugins" >/dev/null; then
+    [[ $section =~ ^(left|center|right)$ ]] || section=center
+    run omarchy plugin enable "$id" --section "$section"
+  else run omarchy plugin enable "$id"; fi
+}
+case $action in
+install|install-enable) run omarchy plugin add "$source_url" --yes || finish false 'Installation failed. Review diagnostics and refresh local state; a partial disabled installation may remain.' ;;
+enable) enable_plugin || finish false 'Enable failed; inspect diagnostic details.' ;;
+disable) run omarchy plugin disable "$id" || finish false 'Disable failed; inspect diagnostic details.' ;;
+update) run omarchy plugin update "$id" --yes || finish false 'Update failed. The CLI reports whether validation rollback was possible.' ;;
+remove) run omarchy plugin remove "$id" --yes || finish false 'Removal failed; inspect diagnostic details.' ;;
+esac
+run omarchy-shell shell rescanPlugins || finish false 'The command completed but the shell could not rescan. State has not been confirmed.'
+confirmed=false
+for attempt in {1..20}; do
+  if refresh_local; then
+    case $action in
+      install|install-enable|disable) filter='any(.[]; .id==$id and .enabled==false)' ;;
+      enable) filter='any(.[]; .id==$id and .enabled==true)' ;;
+      remove) filter='all(.[]; .id!=$id)' ;;
+      update) filter='any(.[]; .id==$id)' ;;
+    esac
+    if jq -e --arg id "$id" "$filter" "$tmp/plugins" >/dev/null; then confirmed=true; break; fi
+  fi
+  sleep 0.1
+done
+[[ $confirmed == true ]] || finish false 'Command finished, but the expected plugin state was not confirmed. A source may have changed its manifest ID; inspect local plugins before continuing.'
+if [[ $action == remove && ( -e $HOME/.config/omarchy/plugins/$id || -L $HOME/.config/omarchy/plugins/$id ) ]]; then finish false 'Shell no longer lists the plugin, but its directory still exists.'; fi
+if [[ $action == update ]]; then
+  path="$HOME/.config/omarchy/plugins/$id"
+  head_commit=$(git -C "$path" rev-parse HEAD 2>>"$tmp/stderr") || finish false 'Cannot verify the installed Git revision.'
+  fetched_commit=$(git -C "$path" rev-parse FETCH_HEAD 2>>"$tmp/stderr") || finish false 'Cannot verify the fetched Git revision.'
+  [[ $head_commit == "$fetched_commit" ]] || finish false 'Installed revision does not match the fetched revision.'
+  jq -e --arg id "$id" '.id==$id' "$path/manifest.json" >/dev/null || finish false 'Updated manifest ID differs from the expected ID.'
+fi
+if [[ $action == install-enable ]]; then
+  enable_plugin || finish false 'Installed disabled, but enabling failed.'
+  confirmed=false
+  for attempt in {1..20}; do
+    if refresh_local && jq -e --arg id "$id" 'any(.[]; .id==$id and .enabled==true)' "$tmp/plugins" >/dev/null; then confirmed=true; break; fi
+    sleep 0.1
+  done
+  [[ $confirmed == true ]] || finish false 'Installed, but enabled state could not be confirmed.'
+fi
+finish true ''

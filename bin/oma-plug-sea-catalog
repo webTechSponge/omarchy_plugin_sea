@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+SOURCE=https://plugins.omarchy.org/catalog.json
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/oma_plug_sea
+normalize() { jq -e --arg source "$SOURCE" --arg now "$(date -u +%FT%TZ)" -f "$ROOT/lib/normalize.jq" "$1"; }
+valid_cache() { [[ -f $CACHE/catalog.json ]] && jq -e '.schemaVersion==1 and (.plugins|type)=="array" and (.plugins|length)>0' "$CACHE/catalog.json" >/dev/null 2>&1; }
+fallback() {
+  if valid_cache; then jq --arg error "$1" '.stale=true | .error=$error' "$CACHE/catalog.json"
+  else jq -n --arg source "$SOURCE" --arg error "$1" '{schemaVersion:1,ok:false,source:$source,fetchedAt:"",stale:true,error:$error,plugins:[]}'; fi
+}
+# Retain only the last HTTP response block, handling redirects and proxy CONNECT.
+header_value() {
+  awk -v name="$1" 'BEGIN {value=""} /^HTTP\// {value=""} {line=$0; sub(/\r$/, "", line); colon=index(line, ":"); if (colon && tolower(substr(line,1,colon-1))==name) {value=substr(line,colon+1); sub(/^[ \t]+/,"",value); sub(/[ \t]+$/,"",value)}} END {print value}' "$2"
+}
+check_reply() { jq -n --argjson ok "$1" --argjson needed "$2" --arg error "$3" --arg now "$(date -u +%FT%TZ)" '{ok:$ok,refreshNeeded:$needed,error:$error,checkedAt:$now}'; exit 0; }
+check_source() {
+  valid_cache || check_reply true true ''
+  local temp etag modified status new_etag new_modified digest previous
+  temp=$(mktemp -d)
+  trap 'rm -rf -- "$temp"' EXIT
+  # Snapshot the atomically replaced cache; checking never writes catalog state.
+  cp -- "$CACHE/catalog.json" "$temp/cached"
+  etag=$(jq -r '.sourceValidators.etag // "" | select(type=="string" and (test("[\\r\\n]")|not))' "$temp/cached")
+  modified=$(jq -r '.sourceValidators.lastModified // "" | select(type=="string" and (test("[\\r\\n]")|not))' "$temp/cached")
+  local conditional=()
+  if [[ -n $etag ]]; then conditional=(-H "If-None-Match: $etag")
+  elif [[ -n $modified ]]; then conditional=(-H "If-Modified-Since: $modified"); fi
+  if ! status=$(curl --silent --show-error --location --head --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 "${conditional[@]}" -D "$temp/headers" -o /dev/null -w '%{http_code}' "$SOURCE" 2>"$temp/errors"); then
+    check_reply false false "Could not check the catalog: $(head -c 1000 "$temp/errors")"
+  fi
+  [[ $status != 304 ]] || check_reply true false ''
+  if [[ $status == 200 ]]; then
+    new_etag=$(header_value etag "$temp/headers")
+    new_modified=$(header_value last-modified "$temp/headers")
+    if [[ -n $etag && -n $new_etag ]]; then
+      [[ $etag == "$new_etag" ]] && check_reply true false ''
+      check_reply true true ''
+    elif [[ -n $modified && -n $new_modified ]]; then
+      [[ $modified == "$new_modified" ]] && check_reply true false ''
+      check_reply true true ''
+    fi
+  elif [[ $status != 405 && $status != 501 ]]; then
+    check_reply false false "Could not check the catalog (HTTP $status)."
+  fi
+  # Old caches or servers without validators require a bounded content comparison.
+  if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 25 --max-filesize 16777216 "$SOURCE" -o "$temp/raw" 2>"$temp/errors"; then
+    check_reply false false "Could not check catalog contents: $(head -c 1000 "$temp/errors")"
+  fi
+  if ! normalize "$temp/raw" >"$temp/normalized" 2>"$temp/errors"; then
+    check_reply false false 'Catalog check returned invalid data; the saved catalog was preserved.'
+  fi
+  previous=$(jq -r '.sourceHash // ""' "$temp/cached")
+  if [[ -n $previous ]]; then
+    digest=$(sha256sum "$temp/raw"); digest=${digest%% *}
+    [[ $digest == "$previous" ]] && check_reply true false ''
+  elif jq -e -n --slurpfile old "$temp/cached" --slurpfile new "$temp/normalized" '$old[0] | {plugins,generatedAt} == ($new[0] | {plugins,generatedAt})' >/dev/null; then
+    check_reply true false ''
+  fi
+  check_reply true true ''
+}
+case ${1:-refresh} in
+normalize) [[ $# == 2 ]] || exit 2; normalize "$2"; exit ;;
+cached) [[ $# == 1 ]] || exit 2; fallback "Showing the last saved catalog. Refresh to check for changes."; exit ;;
+check) [[ $# == 1 ]] || exit 2; check_source ;;
+refresh) [[ $# -le 1 ]] || exit 2 ;;
+*) echo 'Usage: oma-plug-sea-catalog refresh|cached|check|normalize FILE' >&2; exit 2 ;;
+esac
+umask 077
+mkdir -p "$CACHE"
+exec 9>"$CACHE/catalog.lock"
+if ! flock -n 9; then fallback 'Another catalog refresh is running.'; exit; fi
+raw=$(mktemp "$CACHE/.raw.XXXXXX")
+normalized=$(mktemp "$CACHE/.catalog.XXXXXX")
+errors=$(mktemp "$CACHE/.error.XXXXXX")
+headers=$(mktemp "$CACHE/.headers.XXXXXX")
+trap 'rm -f -- "$raw" "$normalized" "$errors" "$headers"' EXIT
+if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 25 --max-filesize 16777216 -D "$headers" "$SOURCE" -o "$raw" 2>"$errors"; then
+  fallback "Catalog refresh failed: $(head -c 1000 "$errors")"; exit
+fi
+if ! normalize "$raw" >"$normalized" 2>"$errors"; then
+  fallback "Catalog data was rejected; saved catalog retained. $(head -c 1000 "$errors")"; exit
+fi
+digest=$(sha256sum "$raw"); digest=${digest%% *}
+jq --arg etag "$(header_value etag "$headers")" --arg modified "$(header_value last-modified "$headers")" --arg digest "$digest" '.sourceValidators={etag:$etag,lastModified:$modified} | .sourceHash=$digest' "$normalized" >"$raw"
+mv -f -- "$raw" "$CACHE/catalog.json"
+cat "$CACHE/catalog.json"

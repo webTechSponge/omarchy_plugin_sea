@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname -- "$0")/integration-common"
+timeout 5 omarchy-shell shell ping >/dev/null
+if [[ -e $plugin_dir && ! -f $plugin_dir/.oma-plug-sea-managed ]]; then
+  echo 'Refusing to remove an unowned plugin directory.' >&2; exit 1
+fi
+if [[ -d $plugin_dir ]]; then
+  backup "$config_home/omarchy/shell.json"
+  omarchy-shell shell hide local.oma-plug-sea
+  omarchy plugin disable local.oma-plug-sea
+  mkdir -p "$state_home"
+  mv -- "$plugin_dir" "$state_home/removed-plugin.$(date +%Y%m%dT%H%M%S%N)"
+fi
+if [[ -f $menu_file ]] && grep -q '// BEGIN oma_plug_sea' "$menu_file"; then
+  backup "$menu_file"
+  perl -0777 -i -pe 's/\n  \/\/ BEGIN oma_plug_sea\n.*?\n  \/\/ END oma_plug_sea//s' "$menu_file"
+fi
+if [[ -f $launcher ]] && grep -q '^# oma-plug-sea managed launcher$' "$launcher"; then
+  backup "$launcher"; rm -- "$launcher"
+fi
+omarchy-shell shell rescanPlugins
+wait_for_plugin 'all(.[]; .id != "local.oma-plug-sea")'
+printf 'Development integration removed. Recoverable files remain in %s\n' "$state_home"

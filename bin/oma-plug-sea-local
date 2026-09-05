@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Shell discovery is authoritative for enabled/active state. Read manifests only as metadata.
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+if ! timeout 12 omarchy plugin list --json >"$tmp/local" 2>"$tmp/errors" || ! jq -e 'type=="array" and all(.[]; (.id|type)=="string" and (.enabled|type)=="boolean")' "$tmp/local" >/dev/null 2>&1; then
+  jq -n --arg error "Cannot read local plugins. Check that omarchy-shell is running. $(head -c 2000 "$tmp/errors")" '{ok:false,error:$error,plugins:[]}'; exit
+fi
+: >"$tmp/metadata"
+while IFS= read -r id; do
+  [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || continue
+  path="$HOME/.config/omarchy/plugins/$id"
+  [[ -f $path/manifest.json ]] || continue
+  git_managed=false
+  repo=""
+  if [[ -d $path/.git && ! -L $path ]]; then
+    git_managed=true
+    repo=$(git -C "$path" config --get remote.origin.url 2>/dev/null || true)
+  fi
+  jq -c --arg id "$id" --arg path "$path" --arg repo "$repo" --argjson gitManaged "$git_managed" '{id:$id,version:(.version//""),description:(.description//""),repo:$repo,gitManaged:$gitManaged,localPath:$path,defaultSection:(.barWidget.defaultSection//"center")}' "$path/manifest.json" >>"$tmp/metadata" 2>/dev/null || true
+done < <(jq -r '.[].id' "$tmp/local")
+jq -n --slurpfile local "$tmp/local" --slurpfile meta "$tmp/metadata" '{ok:true,error:"",plugins:[$local[0][] | . as $p | ({version:"",repo:"",gitManaged:false,localPath:"",defaultSection:"center"} + . + ([$meta[]|select(.id==$p.id)][0]//{}))]}'

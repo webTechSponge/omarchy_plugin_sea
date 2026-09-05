@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Isolated behavior tests: every integration target and every CLI mutation is mocked.
+set -euo pipefail
+project=$(cd -- "$(dirname -- "$0")/.." && pwd)
+[[ -f $project/PluginBrowser.qml ]] || { echo 'PluginBrowser.qml must exist before integration tests run.' >&2; exit 1; }
+test_root=$(mktemp -d)
+trap 'rm -rf -- "$test_root"' EXIT
+mock_bin=$test_root/mock-bin
+mkdir -p "$mock_bin"
+cat > "$mock_bin/omarchy" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$(basename "$0") $*" >> "$HOME/cli.log"
+if [[ $(basename "$0") == omarchy-shell ]]; then
+  case ${2:-} in
+    ping) echo ok ;;
+    rescanPlugins) printf '0\n' > "$HOME/polls" ;;
+    hide) : ;;
+    *) echo 'Unexpected shell command' >&2; exit 2 ;;
+  esac
+  exit
+fi
+[[ ${1:-} == plugin ]] || exit 2
+plugin=$HOME/.config/omarchy/plugins/local.oma-plug-sea
+case ${2:-} in
+  validate)
+    [[ -f $3/manifest.json && -f $3/PluginBrowser.qml ]]
+    jq -e '.id == "local.oma-plug-sea"' "$3/manifest.json" >/dev/null
+    ;;
+  list)
+    polls=$(cat "$HOME/polls" 2>/dev/null || echo 0)
+    polls=$((polls + 1)); printf '%s\n' "$polls" > "$HOME/polls"
+    if [[ -d $plugin && $polls -ge 3 ]]; then
+      enabled=false; [[ ! -f $HOME/enabled ]] || enabled=true
+      printf '[{"id":"local.oma-plug-sea","enabled":%s}]\n' "$enabled"
+    else echo '[]'; fi
+    ;;
+  enable)
+    [[ -d $plugin && $(cat "$HOME/polls") -ge 3 ]] || { echo 'Enable raced discovery' >&2; exit 3; }
+    touch "$HOME/enabled"
+    ;;
+  disable) rm -f "$HOME/enabled" ;;
+  *) echo 'Unexpected plugin command' >&2; exit 2 ;;
+esac
+MOCK
+chmod +x "$mock_bin/omarchy"
+cp "$mock_bin/omarchy" "$mock_bin/omarchy-shell"
+run() {
+  env -i HOME="$test_home" PATH="$mock_bin:$PATH" LC_ALL=C \
+    XDG_STATE_HOME="$test_home/.local/state" XDG_BIN_HOME="$test_home/.local/bin" \
+    "$project/scripts/$1" > "$test_root/output" 2>&1
+}
+fail() { echo "FAIL: $*" >&2; cat "$test_root/output" >&2; exit 1; }
+expect_reject() { if run "$1"; then fail "accepted $2"; fi; }
+new_home() {
+  test_home=$test_root/$1
+  mkdir -p "$test_home/.config/omarchy/extensions" "$test_home/.local/bin"
+  printf '{"version":1,"plugins":[],"personal":"untouched"}\n' > "$test_home/.config/omarchy/shell.json"
+}
+new_home roundtrip
+menu=$test_home/.config/omarchy/extensions/omarchy-menu.jsonc
+cat > "$menu" <<'MENU'
+// Personal menu extension, including comments before root.
+/* Keep this annotation byte-for-byte. */
+{
+  // URL syntax must survive JSONC handling.
+  "personal.docs": {"label":"Docs", "action":"xdg-open https://example.org/a//b"},
+  "personal.quote": {"label":"A { quote }", "action":"printf '%s' 'hello'"},
+}
+MENU
+cp "$menu" "$test_root/original-menu"
+cp "$test_home/.config/omarchy/shell.json" "$test_root/original-shell"
+run dev-install || fail 'first install'
+[[ -f $test_home/.config/omarchy/plugins/local.oma-plug-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
+[[ -x $test_home/.local/bin/oma-plug-sea ]] || fail 'launcher not executable'
+[[ $(rg -c '"setup.plugin.browse"' "$menu") == 1 ]] || fail 'Browse entry count'
+cp "$menu" "$test_root/installed-menu"
+run dev-install || fail 'idempotent install'
+cmp -s "$menu" "$test_root/installed-menu" || fail 'reinstall changed menu'
+[[ $(rg -c 'plugin enable local.oma-plug-sea' "$test_home/cli.log") == 2 ]] || fail 'enable count'
+run dev-uninstall || fail 'uninstall'
+cmp -s "$menu" "$test_root/original-menu" || fail 'menu did not round-trip byte-for-byte'
+cmp -s "$test_home/.config/omarchy/shell.json" "$test_root/original-shell" || fail 'unrelated shell config changed'
+[[ ! -e $test_home/.config/omarchy/plugins/local.oma-plug-sea && ! -e $test_home/.local/bin/oma-plug-sea ]] || fail 'uninstall residue'
+shopt -s nullglob
+backups=("$test_home/.local/state/oma_plug_sea/backups/omarchy-menu.jsonc."*)
+(( ${#backups[@]} >= 2 )) || fail 'missing timestamped menu backups'
+[[ ${backups[0]} =~ [0-9]{8}T[0-9]{15}$ ]] || fail 'backup name lacks timestamp'
+cmp -s "${backups[0]}" "$test_root/original-menu" || fail 'backup did not preserve original menu'
+run dev-uninstall || fail 'idempotent uninstall'
+printf 'PASS: install, asynchronous discovery, idempotence, exact JSONC round-trip, backups, cleanup\n'
+
+new_home unowned
+mkdir -p "$test_home/.config/omarchy/plugins/local.oma-plug-sea"
+printf 'owned by user\n' > "$test_home/.config/omarchy/plugins/local.oma-plug-sea/personal"
+expect_reject dev-install 'unowned plugin'
+expect_reject dev-uninstall 'unowned plugin removal'
+[[ $(cat "$test_home/.config/omarchy/plugins/local.oma-plug-sea/personal") == 'owned by user' ]] || fail 'unowned plugin changed'
+rm -r "$test_home/.config/omarchy/plugins/local.oma-plug-sea"
+printf 'personal launcher\n' > "$test_home/.local/bin/oma-plug-sea"
+expect_reject dev-install 'unowned launcher'
+[[ $(cat "$test_home/.local/bin/oma-plug-sea") == 'personal launcher' ]] || fail 'unowned launcher changed'
+rm "$test_home/.local/bin/oma-plug-sea"
+printf '{"setup.plugin.browse":{"label":"Personal browser"}}\n' > "$test_home/.config/omarchy/extensions/omarchy-menu.jsonc"
+expect_reject dev-install 'existing Browse ownership'
+printf 'PASS: unowned plugin, launcher and menu protection\n'
+
+for target in plugin launcher menu; do
+  new_home "symlink-$target"
+  mkdir -p "$test_home/.config/omarchy/plugins"
+  case $target in
+    plugin) link=$test_home/.config/omarchy/plugins/local.oma-plug-sea ;;
+    launcher) link=$test_home/.local/bin/oma-plug-sea ;;
+    menu) link=$test_home/.config/omarchy/extensions/omarchy-menu.jsonc ;;
+  esac
+  ln -s "$test_home/nonexistent" "$link"
+  expect_reject dev-install "dangling $target symlink"
+  expect_reject dev-uninstall "dangling $target symlink removal"
+  [[ -L $link && ! -e $test_home/nonexistent ]] || fail 'symlink target changed'
+done
+printf 'PASS: dangling symlink rejection for all integration targets\n'

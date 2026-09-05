@@ -1,0 +1,24 @@
+# Runtime tools are provided by Omarchy/Arch; no additional language runtime.
+[env]
+OMA_PLUG_SEA_PROJECT = "{{config_root}}"
+
+[tasks.setup]
+description = "Verify the native Omarchy development environment"
+run = "scripts/setup"
+
+[tasks.check]
+description = "Validate manifest, syntax, and deterministic behavior"
+run = "scripts/check"
+
+[tasks.install]
+description = "Install a recoverable development copy and menu entry"
+run = "scripts/dev-install"
+
+[tasks.uninstall]
+run = "scripts/dev-uninstall"
+
+[tasks.smoke]
+run = "scripts/smoke-test"
+
+[tasks.open]
+run = "bin/oma-plug-sea"
