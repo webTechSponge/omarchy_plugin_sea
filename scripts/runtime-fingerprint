@@ -6,7 +6,7 @@ cd -- "$root"
 {
   printf '%s\0' manifest.json PluginBrowser.qml
   find components js bin lib -type f ! -path '*/.preview-decode*/*' ! -name '.preview-decode*' ! -name 'preview-decode.build-id' -print0
-  printf '%s\0' assets/branding/wordmark-pluginsea-v3.png assets/branding/icon-pluginsea-v3.png
+  printf '%s\0' assets/branding/wordmark-pluginsea-v4.png assets/branding/icon-pluginsea-v4.png
 } | LC_ALL=C sort -z | while IFS= read -r -d '' file; do
   [[ -f $file && ! -L $file ]] || { echo "Missing or unsafe runtime file: $file" >&2; exit 1; }
   if [[ $file == PluginBrowser.qml ]]; then

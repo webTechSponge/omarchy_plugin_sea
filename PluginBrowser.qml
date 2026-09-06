@@ -294,7 +294,7 @@ Item {
                         Image {
                             visible: !!root.detail
                             Layout.preferredWidth: 42; Layout.preferredHeight: 42
-                            source: Qt.resolvedUrl("assets/branding/icon-pluginsea-v3.png")
+                            source: Qt.resolvedUrl("assets/branding/icon-pluginsea-v4.png")
                             sourceSize: Qt.size(84, 84); fillMode: Image.PreserveAspectFit
                             Accessible.role: Accessible.Graphic; Accessible.name: "Omarchy Plugin Sea"
                         }
@@ -303,7 +303,7 @@ Item {
                             Image {
                                 id: brandWordmark; visible: !root.detail && status !== Image.Error
                                 Layout.fillWidth: true; Layout.preferredHeight: Math.min(surface.height < 600 ? 60 : 92, width / 3)
-                                source: Qt.resolvedUrl("assets/branding/wordmark-pluginsea-v3.png")
+                                source: Qt.resolvedUrl("assets/branding/wordmark-pluginsea-v4.png")
                                 sourceSize.width: 1000; fillMode: Image.PreserveAspectFit
                                 horizontalAlignment: Image.AlignLeft
                                 Accessible.role: Accessible.Graphic; Accessible.name: "Omarchy Plugin Sea"

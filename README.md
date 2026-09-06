@@ -1,6 +1,6 @@
 # Omarchy Plugin Sea
 
-![Omarchy Plugin Sea wave-and-plug wordmark](assets/branding/wordmark-pluginsea-v3.png)
+![Omarchy Plugin Sea wave-and-plug wordmark](assets/branding/wordmark-pluginsea-v4.png)
 
 A native, theme-aware community plugin browser inside the existing Omarchy Quickshell desktop. Browse cards and previews, search names/authors/tags, filter by category or installation state, sort by name/stars/listing date, inspect provenance, and manage local plugins with explicit consent.
 

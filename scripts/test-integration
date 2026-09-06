@@ -85,7 +85,7 @@ installed_entry=$(jq -r '.entryPoints.overlay' "$installed_root/manifest.json")
 [[ $installed_entry =~ ^runtime/[a-f0-9]{64}/PluginBrowser.qml$ ]] || fail 'entrypoint lacks unique build URL'
 installed_runtime=$installed_root/${installed_entry%/PluginBrowser.qml}
 [[ ! -e $installed_root/PluginBrowser.qml && ! -e $installed_root/components ]] || fail 'unused unstamped runtime copy remains'
-for asset in wordmark-pluginsea-v3.png icon-pluginsea-v3.png; do
+for asset in wordmark-pluginsea-v4.png icon-pluginsea-v4.png; do
   cmp -s "$project/assets/branding/$asset" "$installed_runtime/assets/branding/$asset" || fail 'branding asset missing or changed in installed copy'
 done
 installed_lib=$installed_runtime/lib

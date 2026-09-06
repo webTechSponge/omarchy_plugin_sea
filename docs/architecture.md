@@ -46,7 +46,7 @@ Detail previews open a modal native `ImageViewer` with fit-to-window, native dim
 
 ## Application branding
 
-The approved version 3 artwork lives in `assets/branding/`. The browse header displays the PluginSea wordmark; detail pages show the matching wave-and-plug icon. Both expose the accessible name Omarchy Plugin Sea, and the header retains a text fallback if the wordmark cannot load. Existing manifest, commands and storage identifiers are unchanged. The development installer ships only the approved PNG pair; earlier design iterations and generation notes remain in the source repository.
+The transparent version 4 artwork, derived from the approved version 3 design, lives in `assets/branding/`. The browse header displays the PluginSea wordmark; detail pages show the matching wave-and-plug icon. Both PNGs have real alpha transparency and a subtle navy contour/shadow to preserve legibility across light and dark themes. Both expose the accessible name Omarchy Plugin Sea, and the header retains a text fallback if the wordmark cannot load. Existing manifest, commands and storage identifiers are unchanged. The development installer ships only the approved PNG pair; earlier design iterations and generation notes remain in the source repository.
 
 ## Reviewed source identity
 

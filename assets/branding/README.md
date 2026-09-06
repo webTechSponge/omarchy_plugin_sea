@@ -5,9 +5,9 @@ Generated using the built-in image generation tool on 2026-09-05.
 - `wordmark-dark-v1.png`: horizontal logo and Omarchy Plugin Sea wordmark.
 - `icon-dark-v1.png`: matching standalone wave-and-plug icon.
 
-The approved branding is version 3: `wordmark-pluginsea-v3.png` and `icon-pluginsea-v3.png`, used in the app header and detail pages respectively. The graphical name joins **PluginSea**, with cream **PluginS** and turquoise **ea** sharing the S. Earlier versions remain as design history. Exact version 3 prompts are in [pluginsea-v3-notes.md](pluginsea-v3-notes.md).
+The current transparent branding is version 4: `wordmark-pluginsea-v4.png` and `icon-pluginsea-v4.png`, used in the app header and detail pages respectively. The graphical name joins **PluginSea**, with cream **PluginS** and turquoise **ea** sharing the S. Earlier versions remain as design history. Exact version 3 prompts are in [pluginsea-v3-notes.md](pluginsea-v3-notes.md).
 
-These are raster PNG assets with opaque navy backgrounds, not transparent or vector masters. The lettering is artwork; the interface retains the accessible plain-text name Omarchy Plugin Sea. The development installer copies only the approved pair into the runtime plugin.
+These are RGBA PNG assets with a genuinely transparent background, a thin navy contour and a soft edge shadow for light/dark theme legibility. Version 4 is derived locally from the approved version 3 artwork without changing its shapes or lettering. The opaque version 3 originals are retained. The lettering is artwork; the interface retains the accessible plain-text name Omarchy Plugin Sea. The development installer copies only the approved pair into the runtime plugin.
 
 ## Prompts
 
@@ -26,3 +26,15 @@ Edit this exact logo artwork. Replace the entire gray and white checkerboard bac
 ### Matching icon
 
 Use the supplied brand logo as a style reference to create its matching standalone square app icon. ONLY the curling cyan/electric-blue ocean wave merging with a two-prong electric plug; remove all lettering and the long underline, make wave tail curl back into a compact near-circular emblem. Simplify to broad bold shapes with minimal droplets, clean silhouette, recognizable at small size. Retain bright turquoise, blue and white foam and prongs. Center the large emblem with 12% safe margins on uniform dark midnight navy. Square 1024x1024 composition. No words, no letters, no watermark, no checkerboard, no presentation layout. Finished app icon.
+
+## Reproduce transparent version 4
+
+The user approved local image processing after generated exports baked in a checkerboard. No generated checkerboard asset is shipped. The offline Qt tool removes the near-navy matte, unmattes partial edge pixels and adds a four-source-pixel contour with a gently blurred shadow. It is artwork preparation only; the app gains no dependency or shader.
+
+```bash
+mise exec -- bash -c 'g++ -std=c++17 assets/branding/tools/transparent.cpp -o /tmp/sea-brand $(pkg-config --cflags --libs Qt6Gui)'
+/tmp/sea-brand assets/branding/wordmark-pluginsea-v3.png assets/branding/wordmark-pluginsea-v4.png
+/tmp/sea-brand assets/branding/icon-pluginsea-v3.png assets/branding/icon-pluginsea-v4.png
+```
+
+Pixels outside the artwork and edge shadow have alpha zero; partially transparent pixels preserve smooth edges. Both assets were inspected on dark navy, white and pale blue backgrounds.
