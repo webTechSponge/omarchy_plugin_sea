@@ -10,6 +10,7 @@ fi
 while IFS= read -r id; do
   [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || continue
   path="$HOME/.config/omarchy/plugins/$id"
+  [[ ! -L $path/manifest.json && ! -L $path/.git ]] || continue
   [[ -f $path/manifest.json ]] || continue
   git_managed=false
   repo=""

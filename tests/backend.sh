@@ -107,6 +107,7 @@ printf '{"retained":"config"}' >"$HOME/.config/omarchy/shell.json"
 pass=0
 assert() { if ! jq -e "$2" "$1" >/dev/null; then echo "FAIL: $3" >&2; cat "$1" >&2; exit 1; fi; pass=$((pass+1)); }
 cat_helper="$ROOT/bin/oma-plug-sea-catalog"
+local_helper="$ROOT/bin/oma-plug-sea-local"
 act="$ROOT/bin/oma-plug-sea-action"
 "$cat_helper" refresh >"$tmp/out"
 assert "$tmp/out" '.ok and (.stale|not) and (.plugins|length)==3' 'real-schema fixture normalization'
@@ -157,6 +158,21 @@ flock -u 8
 printf '{broken' >"$tmp/broken"
 TEST_CATALOG="$tmp/broken" "$cat_helper" refresh >"$tmp/out"
 assert "$tmp/out" '.ok and .stale and (.error|contains("rejected"))' 'malformed catalog retained'
+mkdir -p "$tmp/evil-target" "$tmp/evil-cache"
+ln -s "$tmp/evil-target" "$tmp/evil-cache/oma_plug_sea"
+XDG_CACHE_HOME="$tmp/evil-cache" "$cat_helper" refresh >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.error|contains("Cache directory unavailable"))' 'symlinked cache dir refused with last-good fallback'
+[[ $(find "$tmp/evil-target" -mindepth 1 | wc -l) == 0 ]]
+pass=$((pass+1))
+TEST_ETAG=$'"crlf\rv1"' "$cat_helper" refresh >"$tmp/out"
+assert "$tmp/out" '.ok and .sourceValidators.etag=="\"crlfv1\""' 'CR stripped from persisted ETag'
+: >"$tmp/conditions"
+TEST_ETAG=$'"crlf\rv1"' "$cat_helper" check >"$tmp/out"
+assert "$tmp/out" '.ok and .refreshNeeded' 'conditional check still functions after sanitization'
+[[ $(wc -l <"$tmp/conditions") == 1 ]]
+[[ $(tail -1 "$tmp/conditions") == 'If-None-Match: "crlfv1"' ]]
+pass=$((pass+1))
+pass=$((pass+1))
 printf '{"plugins":[{"id":"../bad","name":"Bad"}]}' >"$tmp/broken"
 if "$cat_helper" normalize "$tmp/broken" >/dev/null 2>&1; then echo 'FAIL invalid ID' >&2; exit 1; fi
 pass=$((pass+1))
@@ -275,6 +291,20 @@ cmp "$tmp/before-provenance" "$tmp/argv"
 "$act" remove test.weather --confirm-remove >/dev/null
 TEST_INSTALL_ID=test.surprise "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok==false and all(.plugins[];.enabled==false)' 'mutable manifest ID cannot auto-enable unexpected plugin'
+printf '[{"id":"test.linked","name":"Linked","enabled":false}]' >"$tmp/local.json"
+mkdir -p "$HOME/.config/omarchy/plugins/test.linked"
+printf '{"version":"9.9","description":"decoy"}' >"$tmp/decoy.json"
+ln -sf "$tmp/decoy.json" "$HOME/.config/omarchy/plugins/test.linked/manifest.json"
+"$local_helper" >"$tmp/out"
+assert "$tmp/out" '.ok and ([.plugins[]|select(.id=="test.linked")]|length)==1 and all(.plugins[];select(.id=="test.linked")|.version=="" and .localPath=="")' 'symlinked manifest contributes no metadata'
+rm -rf -- "$HOME/.config/omarchy/plugins/test.linked"
+printf '[{"id":"test.gitlink","name":"GitLink","enabled":false}]' >"$tmp/local.json"
+mkdir -p "$HOME/.config/omarchy/plugins/test.gitlink" "$tmp/decoy-git"
+printf '{"version":"1.0"}' >"$HOME/.config/omarchy/plugins/test.gitlink/manifest.json"
+ln -s "$tmp/decoy-git" "$HOME/.config/omarchy/plugins/test.gitlink/.git"
+"$local_helper" >"$tmp/out"
+assert "$tmp/out" '.ok and all(.plugins[];select(.id=="test.gitlink")|.version=="" and .localPath=="")' 'symlinked .git contributes no metadata'
+rm -rf -- "$HOME/.config/omarchy/plugins/test.gitlink"
 rm -f "$XDG_CACHE_HOME/oma_plug_sea/catalog.json"
 TEST_NETWORK_FAIL=1 "$cat_helper" check >"$tmp/out"
 assert "$tmp/out" '.ok and .refreshNeeded' 'no saved catalog requires refresh without making a network request'

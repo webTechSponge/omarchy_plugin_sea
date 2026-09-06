@@ -49,6 +49,7 @@ function filter(rows, query, category, scope, sort, direction) {
     return filtered;
 }
 function safeLink(url) { return /^https:\/\/[^\s/@]+(?:\/[^\s]*)?$/.test(String(url || "")); }
+function safeGitHubLink(url) { return canonicalGitHub(url) !== ""; }
 
 // IDs correlate installation state, not repository identity or code provenance.
 // Never use catalog origin as a substitute for an unknown installed Git origin.
