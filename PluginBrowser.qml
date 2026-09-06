@@ -330,7 +330,7 @@ Item {
                     RowLayout {
                         visible: !root.detail; Layout.fillWidth: true; spacing: 12
                         Ui.Dropdown { Layout.preferredWidth: 165; label: "State"; showLabel: false; value: root.scope; options: ["All plugins", "Installed", "Available"]; onChanged: function(value) { root.scope = value; } }
-                        Ui.Dropdown { Layout.preferredWidth: 175; label: "Sort"; showLabel: false; value: root.sort; options: ["Name", "Most stars", "Recently listed"]; onChanged: function(value) { root.sort = value; } }
+                        Ui.Dropdown { Layout.preferredWidth: 205; label: "Sort"; showLabel: false; value: root.sort; options: [{value:"Name", label:"Sort: name"}, {value:"Most stars", label:"Stars: high to low"}, {value:"Recently listed", label:"Recently listed"}]; onChanged: function(value) { root.sort = value; } }
                         Item { Layout.fillWidth: true }
                         Text { text: root.filtered.length + " plugins"; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }

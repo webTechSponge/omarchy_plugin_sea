@@ -32,6 +32,8 @@ Item {
             check(Catalog.filter(rows,"","All categories","Available","Most stars")[0].id === "test.one","Available filter and stars sort");
             check(Catalog.filter(rows,"","All categories","Available","Name").length === 1,"Available excludes manual or unavailable catalog entries");
             check(Catalog.filter(rows,"","All categories","All plugins","Recently listed")[0].id === "test.two","Date sort");
+            check(Catalog.filter(rows,"","All categories","All plugins","Most stars")[0].id === "test.two", "Star sorting compares multiple candidates descending");
+            check(Catalog.starCount({stars:-1}) === 0 && Catalog.starCount({stars:"12"}) === 0 && Catalog.starCount({stars:12.8}) === 12, "Star counts remain nonnegative integers");
             check(Catalog.categories(rows).join("|") === "All categories|Desktop|Local|Tools","Categories unique and sorted");
             check(!Catalog.safeLink("file:///etc/passwd") && !Catalog.safeLink("javascript:alert(1)") && Catalog.safeLink("https://github.com/test/repo"),"Only HTTPS links");
             var listed = {id:"test.source", repo:"https://github.com/Original/Plugin.git/", verificationStatus:"Verified"};

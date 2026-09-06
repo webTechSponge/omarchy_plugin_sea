@@ -37,7 +37,7 @@ function filter(rows, query, category, scope, sort) {
             && (scope === "All plugins" || (scope === "Installed" && p.local) || (scope === "Available" && !p.local && p.installAvailable === true));
     });
     filtered.sort(function(a,b) {
-        if (sort === "Most stars" && (a.stars || 0) !== (b.stars || 0)) return (b.stars || 0) - (a.stars || 0);
+        if (sort === "Most stars" && starCount(a) !== starCount(b)) return starCount(b) - starCount(a);
         if (sort === "Recently listed" && a.listedAt !== b.listedAt) return String(b.listedAt || "").localeCompare(String(a.listedAt || ""));
         return String(a.name || a.id).localeCompare(String(b.name || b.id));
     });
@@ -101,4 +101,15 @@ function lifecycleWarning(p) {
         + "Check the source and catalog explanation before enabling or updating. "
         + (p.local ? "You can still disable or remove the installed plugin. " : "")
         + (p.local && !sourceMatches(p) ? "This warning refers to the listing with the same ID; its source is not confirmed to match this installation." : "");
+}
+
+function starCount(p) {
+    return typeof p.stars === "number" && isFinite(p.stars) ? Math.max(0, Math.floor(p.stars)) : 0;
+}
+function availabilityHelp(p) {
+    var message = p.local
+        ? (p.local.enabled ? "Installed and enabled: this plugin can run code as your user." : "Installed but disabled: its files are on this computer, but it is not enabled in the shell.")
+        : p.installAvailable ? "Available means this listing supports installation through this app. It does not mean the plugin is already installed or has been verified safe. Install disabled to inspect its source before enabling."
+        : "This listing cannot currently be installed through this app. Open its details for the author's source and any manual setup instructions.";
+    return message + (lifecycleWarning(p) ? "\n\n" + lifecycleWarning(p) : "");
 }

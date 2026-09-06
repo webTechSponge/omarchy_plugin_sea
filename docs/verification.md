@@ -120,3 +120,9 @@ Git source checks still cannot be atomic against unrelated same-user configurati
 Version 4 removes the original navy matte through user-approved local Qt image processing, preserving the version 3 artwork. Both outputs are RGBA PNGs with more than one million fully transparent pixels each and partially transparent antialias/shadow edges. A thin navy contour and tight soft shadow preserve cream/cyan contrast on light backgrounds. Dark navy, white and pale blue composites were visually inspected; no simulated checkerboard asset is shipped.
 
 `mise run check` passes, including installed asset equality and runtime fingerprint checks. The managed installation was refreshed, its live fingerprint verified, and the actual header inspected without the old rectangle. Keyboard smoke passes. The README screenshot and artwork references now use the transparent version. The reproducible preparation tool is development-only and adds no app dependency or runtime effect.
+
+## Listing explanations and stars — 2026-09-06
+
+Cards now show catalog repository star counts beside their titles; local-only entries display a dash. The existing descending-star sort is explicitly labelled “Stars: high to low.” Actual Qt model tests compare multiple candidates and cover malformed/negative/fractional counts. Availability, catalog verification and stars have themed, wrapped, plain-text hover explanations; tooltip content is positioned above the corresponding label.
+
+`mise run check` passes (134 advisory QML warnings). After the final tooltip placement adjustment, QML/model checks and keyboard smoke pass. The installed runtime fingerprint was verified. Live mouse checks exercised both availability and catalog tooltips, selected star sorting, confirmed descending visible counts and opened a card. The listing was visually inspected at 1120×748 and 620×480; the README screenshot was refreshed.
