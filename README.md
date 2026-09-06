@@ -4,22 +4,34 @@
 
 A native, theme-aware community plugin browser inside the existing Omarchy Quickshell desktop. Browse cards and previews, search names/authors/tags, filter by category or installation state, sort by name/stars/listing date, inspect provenance, and manage local plugins with explicit consent.
 
-![Omarchy Plugin Sea with transparent branding, star counts and live catalog previews](docs/screenshots/browser-transparent-logo.png)
+![Omarchy Plugin Sea with transparent branding, star counts and live catalog previews](preview.png)
+
+## Install
+
+Requires Omarchy with the Quickshell plugin CLI and a running shell. Standard Omarchy tools (Bash, curl, jq, Git, util-linux and coreutils) are used at runtime. Install the native preview dependencies if they are missing, then use Omarchy's standard installer:
+
+```bash
+omarchy pkg add qt6-imageformats gcc pkgconf qt6-base
+omarchy plugin add https://github.com/webTechSponge/omarchy_plugin_sea --enable
+```
+
+On first preview use, the app automatically compiles its bundled Qt decoder into your private cache. It reuses that build and rebuilds when the decoder source or toolchain changes. There is no separate build/setup command, downloaded executable or administrative action inside the app. The first preview may take a few seconds; missing packages or build failures are explained on the detail page. Dependencies must already be installed: Omarchy does not install them from plugin manifests.
 
 ## Open
 
 ```bash
-oma-plug-sea
-# Or: Setup → Plugins → Browse
-# Stable IPC route:
 omarchy-shell shell summon local.oma-plug-sea '{}'
 ```
 
+For a standard Git installation, this is the opening command. Omarchy does not automatically create menu entries or launchers for overlays. The separate development-install workflow below adds `oma-plug-sea` and **Setup → Plugins → Browse**.
+
+To update a standard installation, close the browser and run `omarchy plugin update local.oma-plug-sea`. To remove it, run `omarchy plugin remove local.oma-plug-sea`. The preview cache is retained and can be removed separately.
+
 The repository directory is `omarchy_plugin_sea` and the visible application name is **Omarchy Plugin Sea**. The existing `oma-plug-sea` command, `local.oma-plug-sea` manifest ID, and cache/state paths are retained for compatibility.
 
-## Requirements and setup
+## Development setup
 
-Omarchy with the current plugin CLI, a running Quickshell shell, Bash, curl, jq, Git, util-linux (`flock`, `prlimit`), coreutils (`timeout`), Perl, and Qt6 with `qt6-imageformats` for WebP previews. A small native Qt helper decodes previews in a separate process and caches PNGs. No Python, Node, database, or web framework is required. Building from source needs `g++`, `pkg-config` and Qt6 development files (`gcc`, `pkgconf`, `qt6-base` on Arch). Setup and checks also require `qt6-declarative` (`qmllint` and the Qt6 QML runner), `libwebp` fixture APIs and `ripgrep`. The optional desktop keyboard smoke check requires `wtype`.
+The app uses a separate native Qt helper for preview decoding; no Python, Node, database, or web framework is required at runtime. In addition to the standard installation dependencies above, development integration needs Perl. Setup and checks require `qt6-declarative` (`qmllint` and the Qt6 QML runner), `libwebp` fixture APIs and `ripgrep`. The optional desktop keyboard smoke check requires `wtype`.
 
 Install missing native dependencies from a terminal:
 
@@ -27,7 +39,7 @@ Install missing native dependencies from a terminal:
 omarchy pkg add qt6-imageformats gcc pkgconf qt6-base qt6-declarative libwebp ripgrep
 ```
 
-Use mise for the project environment and commands:
+Use this workflow instead of the standard Git installation when developing the app. It creates a managed runtime copy and refuses to overwrite a standard Git installation. Use mise for the project environment and commands:
 
 ```bash
 cd /path/to/omarchy_plugin_sea
@@ -90,13 +102,15 @@ omarchy plugin validate .
 for f in bin/* scripts/*; do bash -n "$f"; done
 bash tests/backend.sh
 bash tests/model.sh
+bash tests/standard-install.sh
+bash tests/standard-cli-install.sh
 scripts/test-integration
 git diff --check
 ```
 
-Desktop tests first compare the checkout, installed files and a fingerprint reported by the running app. A mismatch fails the test and asks you to reinstall; a stale shell instance must be reopened or restarted. Each installed build uses its own runtime path so QML imports cannot be reused from another build.
+Desktop tests require the managed development installation; they are not intended to run against a standard Git installation. They first compare the checkout, installed files and a fingerprint reported by the running app. A mismatch fails the test and asks you to reinstall; a stale shell instance must be reopened or restarted. Each installed build uses its own runtime path so QML imports cannot be reused from another build.
 
-The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, enables, disables and removes it through the real helper/CLI, and verifies each postcondition. It never installs arbitrary third-party code. Integration tests use isolated HOME and mocked CLI state; backend tests exercise malformed/partial data, invalid URLs/IDs, stale cache, network and subprocess failures, concurrency, consent, source mismatches and false-success rejection. Model tests execute the actual JavaScript through Qt6.
+The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, enables, disables and removes it through the real helper/CLI, and verifies each postcondition. It never installs arbitrary third-party code. Development integration tests use isolated HOME and mocked CLI state. The standard-install regression uses the real Omarchy add/validate/catalog commands with a temporary local Git repository, while mocking shell IPC and the preview download. Another source-only test covers automatic compilation, concurrent cache reuse, source updates and failed-build recovery without mise. Backend tests exercise malformed/partial data, invalid URLs/IDs, stale cache, network and subprocess failures, concurrency, consent, source mismatches and false-success rejection. Model tests execute the actual JavaScript through Qt6.
 
 [Architecture and helper schema](docs/architecture.md) · [Verification evidence](docs/verification.md) · [Contributor instructions](AGENTS.md)
 
@@ -106,20 +120,45 @@ The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smo
 omarchy-shell shell ping
 omarchy plugin list --json
 omarchy-shell shell rescanPlugins
+# Run this helper command from the project checkout:
 bin/oma-plug-sea-catalog refresh | jq '{ok,stale,error,count:(.plugins|length)}'
 omarchy-shell shell call local.oma-plug-sea status '{}'
 quickshell log -p "$OMARCHY_PATH/shell" -t 100 --no-color
 ```
 
-If the shell is stopped, use `omarchy restart shell`. If `oma-plug-sea` is not on your PATH, use `~/.local/bin/oma-plug-sea` or the IPC route. A source/ID mismatch requires inspecting local plugin directories before retrying. A dormant-reference error requires reviewing stale shell.json references; restore from a backup if needed. An action lock error means another browser operation is running. Terminal-driven operations do not share this lock, so concurrent external changes can fail a postcondition and require refresh.
+If the shell is stopped, use `omarchy restart shell`. A standard Git installation does not add `oma-plug-sea` to PATH; use the [Open](#open) IPC command. The `~/.local/bin/oma-plug-sea` launcher exists only after development integration. If summon reports that the plugin is disabled, run `omarchy plugin enable local.oma-plug-sea` and try again. A source/ID mismatch requires inspecting local plugin directories before retrying. A dormant-reference error requires reviewing stale shell.json references; restore from a backup if needed. An action lock error means another browser operation is running. Terminal-driven operations do not share this lock, so concurrent external changes can fail a postcondition and require refresh.
+
+### Preview setup problems
+
+The first uncached preview may show **Preparing preview…** while the bundled decoder builds. If dependencies are missing, install the packages shown in the detail-page error, then reopen the detail page to retry. Compilation is limited to 60 seconds; a failed build is not published and the next request can try again.
+
+For a standard Git installation, this optional diagnostic command prepares the decoder and prints its cached executable path:
+
+```bash
+~/.config/omarchy/plugins/local.oma-plug-sea/bin/oma-plug-sea-build-preview
+```
+
+The decoder cache is `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/decoder-builds/`; downloaded/converted images are in the sibling `previews/` directory. Builds are keyed by source and toolchain, so updates rebuild automatically when needed. Removing these caches is optional; subsequent previews recreate them. Already cached PNGs can be displayed without a compiler or a new download.
 
 ## Removal and recovery
+
+For a **standard Git installation**, close the browser and use Omarchy's normal removal command:
+
+```bash
+omarchy plugin remove local.oma-plug-sea
+```
+
+This removes the installed Git checkout through Omarchy. Reinstall with the [standard install commands](#install).
+
+For a **managed development installation**, run this from the project checkout while the shell is running:
 
 ```bash
 mise run uninstall
 ```
 
-With the shell running, this hides/disables the browser, moves its managed copy into the recoverable state directory, removes only its marked menu block and launcher, rescans, and verifies it is undiscovered. Other extensions/configuration remain. Backups and caches are intentionally retained; delete `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea` and `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea` manually once you no longer need recovery. The source checkout is independent and can be removed separately. Reinstall with `mise run install`.
+This hides/disables the browser, moves its managed copy into the recoverable state directory, removes only its marked menu block and launcher, rescans, and verifies it is undiscovered. Other extensions/configuration remain. The source checkout is independent. Reinstall this development integration with `mise run install`.
+
+Both workflows retain app caches and existing recovery data. You can manually delete `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea` and `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea` once you no longer need cached browsing or backups. Development uninstall deliberately refuses to remove an ordinary Git installation; choose the command matching how you installed the app.
 
 ## Known limits
 
@@ -145,7 +184,7 @@ The app cannot reliably show an update-available badge for each installed plugin
 
 Plugin Sea cannot disable or uninstall itself through its own interface. Doing so could interrupt an operation before it finishes or reports its result.
 
-To remove it, run `mise run uninstall` from this project's directory while the Omarchy shell is running. This removes its managed installation, launcher and menu entry while retaining recovery backups. See [Removal and recovery](#removal-and-recovery) for details.
+For a standard Git installation, run `omarchy plugin remove local.oma-plug-sea`. For the managed development installation, run `mise run uninstall` from this project's directory while the Omarchy shell is running. The development command also removes its launcher and menu entry while retaining recovery backups. See [Removal and recovery](#removal-and-recovery) for details.
 
 ### Missing information does not mean missing permissions
 

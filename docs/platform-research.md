@@ -10,7 +10,7 @@ Read `/usr/share/omarchy/shell/README.md`, `shell/plugins/README.md`, `shell/ser
 - `omarchy-shell shell summon local.oma-plug-sea '{}'`, `hide`, `ping`, and `rescanPlugins` are supported. The wrapper does **not** start a stopped shell. Do not use `-q` for postcondition verification: it intentionally reports success when IPC fails.
 - `PluginRegistry.installedPlugins` contains full manifests with `__sourceDir` and `__isFirstParty`. `isEnabled(id)` consults effective config. `pluginsChanged` and `scanFinished` signal refreshes. Canonical identity is manifest ID.
 - `omarchy plugin list --json` returns an array with `id`, `name`, `kinds`, `enabled`, `active`, `canDisable`, `firstParty`, `clonedFrom`; it does **not** expose version or source path. Hidden `omarchy plugin catalog` emits **local** manifests with computed source paths, not a community catalog. It also omits version.
-- User plugins are discovered at `~/.config/omarchy/plugins/<id>/manifest.json`; discovery can follow symlinks, but installation validation rejects them; this project installs copies. Hidden dot directories are ignored. Enabled state is persisted by the shell in `shell.json`; the config is authoritative, not deep-merged defaults.
+- User plugins are discovered at `~/.config/omarchy/plugins/<id>/manifest.json`; discovery can follow symlinks, but installation validation rejects them; the development workflow installs copies, while the standard installer keeps a Git checkout. Hidden dot directories are ignored. Enabled state is persisted by the shell in `shell.json`; the config is authoritative, not deep-merged defaults.
 - Native style references: `shell/plugins/emojis/Emojis.qml` supplies searchable grid, `GridView.Contain`, focus and Escape behavior, `Color.menu.*`, `Style`, `BorderSurface`, full-screen `PanelWindow`, overlay layer and exclusive keyboard focus. `shell/plugins/image-picker/ImagePicker.qml` supplies scalable image selection and request serials. `shell/plugins/panels/speedtest/Panel.qml` demonstrates command arrays, concurrent-process guards, timeout handling and stderr collectors. Collector completion and process exit can arrive in either order.
 - User menu file `~/.config/omarchy/extensions/omarchy-menu.jsonc` merges dotted object keys. Correct entry is `setup.plugin.browse` (singular **plugin**); parent `setup.plugin` already displays **Plugins** under Setup. Static action can invoke the project launcher. Preserve existing JSONC and create a backup before minimal insertion; the file hot-reloads.
 
@@ -38,7 +38,7 @@ Trust-related fields: `verificationStatus`, `verificationSnapshotStatus`, `verif
 - `update <id> --yes` fetches `origin HEAD`, fast-forwards, validates, and hard-rolls back invalid updates. `--yes` suppresses both diff and prompt. Native consent must cover replacing code from mutable upstream; update availability cannot be inferred safely just from a browse version string. It can trigger live code reload for enabled plugins.
 - `remove <id> --yes` unlinks development symlinks, deletes Git checkouts, or backs up non-Git directories under a hidden timestamped sibling. It disables and rescans. Native confirmation should identify the plugin and removal semantics.
 - Add/update/remove require `--yes` in a noninteractive GUI only after equivalent explicit native consent. All actions need bounded process lifetime, captured errors, serialized mutations, rescan and state verification; a zero exit status alone is insufficient.
-- Browse/detail operations must never fetch executable plugin code or run plugin code. Preview network requests are ordinary remote image loads; user source links should be HTTPS and opened via argument arrays.
+- Browse/detail operations must never fetch executable plugin code or run plugin code. Preview images are fetched only from the fixed marketplace asset origin and decoded in a separate restricted process; user source links should be HTTPS and opened via argument arrays.
 
 ## Official signed registry migration
 
@@ -58,3 +58,11 @@ for endpoint in plugins.json all.json config.json; do
 done
 omarchy plugin --help
 ```
+
+## Standard installation audit — 2026-09-06
+
+The installed `omarchy-plugin-add` flow clones, validates, moves the checkout and requests a shell rescan, then optionally enables the plugin. It has no dependency installation or build-hook step. Additional manifest dependency fields would not cause package installation. This app therefore documents its native package requirements and builds its bundled decoder lazily after enable, rather than relying on installer hooks.
+
+The manifest's `menu` kind denotes a summoned menu surface, not contributions to the stock menu. The stock menu combines defaults and user JSONC extensions; a standard overlay install does not create a launcher or Browse entry. Use `omarchy-shell shell summon local.oma-plug-sea '{}'` after enabling. Project-managed menu/launcher setup belongs to the separate development installation, with backups and ownership checks.
+
+`tests/standard-cli-install.sh` exercises the actual installed add/validate/catalog commands against an isolated local Git fixture, then invokes the cloned preview helper with real compilation and decoding. See [verification evidence](verification.md) for the test boundary and results.

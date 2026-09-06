@@ -12,6 +12,7 @@ Item {
     property bool fullResolution: false
     property bool requestFullResolution: false
     property bool loadFailed: false
+    property string errorMessage: ""
     readonly property bool loading: conversion.running || nativeImage.status === Image.Loading
     readonly property bool failed: loadFailed || nativeImage.status === Image.Error
     readonly property real intrinsicWidth: nativeImage.implicitWidth
@@ -24,6 +25,7 @@ Item {
     function load() {
         imageSource = "";
         loadFailed = false;
+        errorMessage = "";
         // Cached catalogs are also untrusted: no remote URL reaches Qt's Image.
         if (!/^https:\/\/plugins\.omarchy\.org\/assets\/img\/plugins\/[A-Za-z0-9._-]+\.webp$/.test(source) || source.indexOf("..") >= 0) { loadFailed = true; return; }
         if (conversion.running) return;
@@ -42,12 +44,12 @@ Item {
         onExited: function(code) {
             Qt.callLater(function() {
                 if (preview.requestSource !== preview.source || preview.requestFullResolution !== preview.fullResolution) { preview.load(); return; }
-                if (code !== 0) { preview.loadFailed = true; return; }
+                if (code !== 0) { preview.errorMessage = "Preview helper failed."; preview.loadFailed = true; return; }
                 try {
                     var result = JSON.parse(output.text);
                     if (result.ok && typeof result.path === "string" && result.path.charAt(0) === "/" && /\.png$/.test(result.path))
                         preview.imageSource = "file://" + result.path;
-                    else preview.loadFailed = true;
+                    else { preview.errorMessage = String(result.error || "Preview unavailable.").substring(0, 500); preview.loadFailed = true; }
                 } catch (e) { preview.loadFailed = true; }
             });
         }

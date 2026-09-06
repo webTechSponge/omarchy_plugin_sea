@@ -1,33 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-source_file="$root/lib/preview-decode.cpp"
-output="$root/lib/preview-decode"
-for tool in g++ pkg-config sha256sum flock; do
-  command -v "$tool" >/dev/null || { printf 'Missing preview build tool: %s\n' "$tool" >&2; exit 1; }
-done
-pkg-config --exists Qt6Gui Qt6Core || {
-  echo 'Missing Qt6 build files; install qt6-base.' >&2
-  exit 1
-}
-# Include compiler and Qt options so native toolchain upgrades rebuild the helper.
-signature=$({
-  sha256sum "$source_file"
-  g++ --version
-  pkg-config --modversion --cflags --libs Qt6Gui Qt6Core
-} | sha256sum | cut -d ' ' -f 1)
-exec 9>"$root/lib/.preview-decode.lock"
-flock 9
-if [[ -x $output && -f $output.build-id && $(cat "$output.build-id") == "$signature" ]]; then
-  exit 0
-fi
-tmp=$(mktemp -d "$root/lib/.preview-decode-build.XXXXXXXX")
-trap 'rm -rf -- "$tmp"' EXIT
-read -r -a qt_cflags <<<"$(pkg-config --cflags Qt6Gui Qt6Core)"
-read -r -a qt_libs <<<"$(pkg-config --libs Qt6Gui Qt6Core)"
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -fPIC \
-  "${qt_cflags[@]}" "$source_file" -o "$tmp/preview-decode" "${qt_libs[@]}"
-printf '%s\n' "$signature" >"$tmp/build-id"
-chmod 755 "$tmp/preview-decode"
-mv -f -- "$tmp/preview-decode" "$output"
-mv -f -- "$tmp/build-id" "$output.build-id"
+"$root/bin/oma-plug-sea-build-preview" --development >/dev/null

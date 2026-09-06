@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Build only this plugin's bundled decoder; never download source or dependencies.
+set -euo pipefail
+umask 077
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source_file="$root/lib/preview-decode.cpp"
+fail() { printf 'Preview build: %s\n' "$*" >&2; exit 1; }
+[[ $# == 0 || ( $# == 1 && $1 == --development ) ]] || fail 'usage: oma-plug-sea-build-preview [--development]'
+for tool in g++ pkg-config sha256sum flock timeout; do
+  command -v "$tool" >/dev/null || fail "Missing $tool. Install native build dependencies: omarchy pkg add gcc pkgconf qt6-base qt6-imageformats"
+done
+[[ -f $source_file ]] || fail 'Bundled lib/preview-decode.cpp is missing; reinstall Omarchy Plugin Sea.'
+timeout --kill-after=2 10 pkg-config --exists Qt6Gui Qt6Core || fail 'Qt6 development files are missing. Run: omarchy pkg add qt6-base qt6-imageformats'
+qt_cflags_text=$(timeout --kill-after=2 10 pkg-config --cflags Qt6Gui Qt6Core) || fail 'Cannot inspect Qt6 compiler options.'
+qt_libs_text=$(timeout --kill-after=2 10 pkg-config --libs Qt6Gui Qt6Core) || fail 'Cannot inspect Qt6 linker options.'
+qt_version=$(timeout --kill-after=2 10 pkg-config --modversion Qt6Gui Qt6Core) || fail 'Cannot inspect Qt6 version.'
+compiler_version=$(timeout --kill-after=2 10 g++ --version) || fail 'Cannot run g++; install gcc.'
+compiler_target=$(timeout --kill-after=2 10 g++ -dumpmachine) || fail 'Cannot inspect the native compiler target.'
+# Source contents, build implementation, native compiler and Qt ABI/options all
+# participate. Relocating an unchanged checkout does not trigger another build.
+signature=$({
+  sha256sum <"$source_file"
+  sha256sum <"${BASH_SOURCE[0]}"
+  printf '%s\n' "$(command -v g++)" "$compiler_version" "$compiler_target" "$qt_version" "$qt_cflags_text" "$qt_libs_text"
+} | sha256sum | cut -d ' ' -f 1)
+if [[ ${1:-} == --development ]]; then
+  build_dir="$root/lib"
+  output="$build_dir/preview-decode"
+  stamp="$output.build-id"
+  lock="$build_dir/.preview-decode.lock"
+else
+  cache_root=${XDG_CACHE_HOME:-$HOME/.cache}/oma_plug_sea/decoder-builds
+  [[ $cache_root == /* ]] || fail 'XDG_CACHE_HOME must be an absolute path.'
+  [[ ! -L $cache_root ]] || fail 'Decoder cache directory must not be a symlink.'
+  mkdir -p -- "$cache_root"
+  [[ -d $cache_root && -O $cache_root ]] || fail 'Decoder cache directory must belong to the current user.'
+  chmod 700 -- "$cache_root"
+  build_dir="$cache_root/$signature"
+  [[ ! -L $build_dir ]] || fail 'Decoder build directory must not be a symlink.'
+  mkdir -p -- "$build_dir"
+  [[ -d $build_dir && -O $build_dir ]] || fail 'Decoder build directory must belong to the current user.'
+  chmod 700 -- "$build_dir"
+  output="$build_dir/preview-decode"
+  stamp="$output.build-id"
+  lock="$build_dir/.preview-decode.lock"
+fi
+[[ ! -L $lock && ! -L $output && ! -L $stamp ]] || fail 'Decoder cache files must not be symlinks.'
+exec 9>"$lock"
+flock -w 75 9 || fail 'Another decoder build is still running; retry the preview shortly.'
+if [[ -x $output && -f $stamp && $(cat "$stamp") == "$signature" ]]; then
+  printf '%s\n' "$output"
+  exit 0
+fi
+tmp=$(mktemp -d "$build_dir/.preview-decode-build.XXXXXXXX")
+trap 'rm -rf -- "$tmp"' EXIT
+read -r -a qt_cflags <<<"$qt_cflags_text"
+read -r -a qt_libs <<<"$qt_libs_text"
+if ! timeout --kill-after=5 60 g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -fPIC \
+  "${qt_cflags[@]}" "$source_file" -o "$tmp/preview-decode" "${qt_libs[@]}" >&2; then
+  fail 'Native decoder compilation failed or exceeded 60 seconds. Check gcc, pkgconf and qt6-base, then retry.'
+fi
+chmod 700 "$tmp/preview-decode"
+timeout --kill-after=2 10 "$tmp/preview-decode" --check || fail 'Decoder codecs are unavailable. Run: omarchy pkg add qt6-imageformats'
+printf '%s\n' "$signature" >"$tmp/build-id"
+mv -f -- "$tmp/preview-decode" "$output"
+mv -f -- "$tmp/build-id" "$stamp"
+printf '%s\n' "$output"

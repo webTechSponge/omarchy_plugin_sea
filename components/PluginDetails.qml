@@ -30,7 +30,7 @@ ColumnLayout {
                 Keys.onReturnPressed: activate()
                 Keys.onEnterPressed: activate()
                 Keys.onSpacePressed: activate()
-                Text { anchors.centerIn: parent; visible: !detailPreview.ready; text: "No preview available"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family }
+                Text { anchors.centerIn: parent; width: parent.width - 32; visible: !detailPreview.ready; text: detailPreview.loading ? "Preparing preview…" : detailPreview.errorMessage || "No preview available"; textFormat: Text.PlainText; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; color: Color.foreground; opacity: 0.7; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                 PreviewImage { id: detailPreview; anchors.fill: parent; source: detail.plugin.previewImage || detail.plugin.previewThumbnail || ""; fillMode: Image.PreserveAspectFit; requestedWidth: 1200 }
                 Rectangle {
                     anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
