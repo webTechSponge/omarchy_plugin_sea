@@ -1,4 +1,8 @@
 .pragma library
+// Count affordance colors, shared by cards and the detail header.
+// Fixed literals: golden stars, red hearts, legible on dark and light themes.
+var STAR_GOLD = "#C9A227";
+var HEART_RED = "#E5484D";
 
 function correlate(remote, local, engagement) {
     var byId = Object.create(null), seen = Object.create(null), result = [];

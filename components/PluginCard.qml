@@ -28,14 +28,14 @@ Ui.BorderSurface {
             Text { width: parent.width - starCount.width - heartCount.width - 2*parent.spacing; text: card.plugin.name || card.plugin.id; textFormat: Text.PlainText; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true; elide: Text.ElideRight }
             Text {
                 id: starCount; text: "★ " + (card.plugin.localOnly ? "—" : Catalog.starCount(card.plugin).toLocaleString(Qt.locale(), "f", 0))
-                color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
+                color: Catalog.STAR_GOLD; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
                 anchors.verticalCenter: parent.verticalCenter
                 HoverHandler { id: starsHover }
                 InfoTooltip { parent: starCount; visible: starsHover.hovered; text: card.plugin.localOnly ? "No catalog star count is available for this local plugin." : "GitHub repository stars reported by the catalog. This count may be shared by plugins in the same repository and can lag behind GitHub. Stars indicate interest, not safety or quality." }
             }
             Text {
-                id: heartCount; text: "♥ " + (card.plugin.hearts == null ? "—" : Catalog.heartCount(card.plugin).toLocaleString(Qt.locale(), "f", 0))
-                color: Color.accent; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
+                id: heartCount; text: "❤️ " + (card.plugin.hearts == null ? "—" : Catalog.heartCount(card.plugin).toLocaleString(Qt.locale(), "f", 0))
+                color: Catalog.HEART_RED; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
                 anchors.verticalCenter: parent.verticalCenter
                 HoverHandler { id: heartsHover }
                 InfoTooltip { parent: heartCount; visible: heartsHover.hovered; text: "Anonymous hearts reported by the omarchyplugins.com marketplace. Hearts are interactions, not downloads, installs, unique people, or safety signals. '—' means the marketplace has no record for this plugin." }

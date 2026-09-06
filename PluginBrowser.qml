@@ -433,6 +433,29 @@ Item {
                             Text { visible: !!root.detail || brandWordmark.status === Image.Error; Layout.fillWidth: true; text: root.detail ? root.detail.name : "Omarchy Plugin Sea"; textFormat: Text.PlainText; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title + 4; font.bold: true; elide: Text.ElideRight }
                             Text { Layout.fillWidth: true; elide: Text.ElideRight; text: root.detail ? root.detail.id : "Discover community plugins for your desktop"; textFormat: Text.PlainText; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         }
+                        ColumnLayout {
+                            visible: !!root.detail
+                            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                            spacing: 2
+                            Row {
+                                Layout.alignment: Qt.AlignRight
+                                spacing: 10
+                                Text {
+                                    text: "★ " + (root.detail && !root.detail.localOnly ? Catalog.starCount(root.detail).toLocaleString(Qt.locale(), "f", 0) : "—")
+                                    color: Catalog.STAR_GOLD; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
+                                }
+                                Text {
+                                    text: "❤️ " + (root.detail && root.detail.hearts != null ? Catalog.heartCount(root.detail).toLocaleString(Qt.locale(), "f", 0) : "—")
+                                    color: Catalog.HEART_RED; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
+                                }
+                            }
+                            Text {
+                                Layout.alignment: Qt.AlignRight
+                                text: root.fetchedAt ? "Refreshed " + root.fetchedAt : ""
+                                visible: text.length > 0
+                                color: Color.foreground; opacity: 0.55; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
+                            }
+                        }
                         Ui.Button {
                             text: root.refreshing || root.refreshQueued ? "Refreshing…" : root.refreshNeeded ? "Refresh available" : root.checking ? "Checking…" : root.checkError || root.catalogError ? "Retry refresh" : "Refresh"
                             foreground: root.refreshNeeded ? Color.accent : Color.foreground
