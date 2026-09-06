@@ -1,12 +1,13 @@
 .pragma library
 
-function correlate(remote, local) {
+function correlate(remote, local, engagement) {
     var byId = Object.create(null), seen = Object.create(null), result = [];
     (local || []).forEach(function(p) { byId[p.id] = p; });
     (remote || []).forEach(function(p) {
         var row = Object.assign({}, p);
         row.local = byId[p.id] || null;
         row.localOnly = false;
+        row.hearts = (engagement && typeof engagement[p.id] === "number") ? engagement[p.id] : null;
         result.push(row); seen[p.id] = true;
     });
     (local || []).forEach(function(p) {
@@ -14,7 +15,7 @@ function correlate(remote, local) {
         result.push({id:p.id, name:p.name || p.id, description:"Installed locally; absent from the community catalog.",
             author:"Local installation", version:p.version || "", category:"Local", tags:p.kinds || [],
             repo:p.repo || "", previewImage:"", previewThumbnail:"", installAvailable:false,
-            verificationStatus:"Not listed", status:"local", local:p, localOnly:true});
+            verificationStatus:"Not listed", status:"local", local:p, localOnly:true, hearts:null});
     });
     return result;
 }
@@ -39,6 +40,7 @@ function filter(rows, query, category, scope, sort, direction) {
     // Keep the legacy default for callers without an explicit direction.
     var sign = direction === "Ascending" ? 1 : direction === "Descending" ? -1 : sort === "Name" ? 1 : -1;
     filtered.sort(function(a,b) {
+        if (sort === "Most hearts" && heartSort(a) !== heartSort(b)) return sign * (heartSort(a) - heartSort(b));
         if (sort === "Most stars" && starCount(a) !== starCount(b)) return sign * (starCount(a) - starCount(b));
         if (sort === "Recently listed" && a.listedAt !== b.listedAt) return sign * String(a.listedAt || "").localeCompare(String(b.listedAt || ""));
         var nameOrder = String(a.name || a.id).localeCompare(String(b.name || b.id));
@@ -108,6 +110,14 @@ function lifecycleWarning(p) {
 
 function starCount(p) {
     return typeof p.stars === "number" && isFinite(p.stars) ? Math.max(0, Math.floor(p.stars)) : 0;
+}
+function heartCount(p) {
+    return typeof p.hearts === "number" && isFinite(p.hearts) ? Math.max(0, Math.floor(p.hearts)) : 0;
+}
+// Sorting key: an absent engagement record (null) sorts below any tracked
+// count so untracked plugins fall last in descending order.
+function heartSort(p) {
+    return p.hearts == null ? -1 : heartCount(p);
 }
 function availabilityHelp(p) {
     var message = p.local

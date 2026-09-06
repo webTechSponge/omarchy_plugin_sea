@@ -2,7 +2,7 @@
 
 ![Omarchy Plugin Sea wave-and-plug wordmark](assets/branding/wordmark-pluginsea-v4.png)
 
-A native, theme-aware community plugin browser inside the existing Omarchy Quickshell desktop. Browse cards and previews, search names/authors/tags, filter by category or installation state, sort by name/stars/listing date, inspect provenance, and manage local plugins with explicit consent.
+A native, theme-aware community plugin browser inside the existing Omarchy Quickshell desktop. Browse cards and previews, search names/authors/tags, filter by category or installation state, sort by name/stars/hearts/listing date, inspect provenance, and manage local plugins with explicit consent.
 
 ![Omarchy Plugin Sea with transparent branding, star counts and live catalog previews](preview.png)
 
@@ -75,7 +75,8 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 
 - Type to search; search is debounced and includes descriptions, IDs, tags and categories.
 - Use category/state/sort selectors; refresh preserves search and filter context. While open, the browser checks the catalog source every five minutes and highlights **Refresh available** when it detects a change. Checks do not replace the catalog until you refresh.
-- Cards show repository star counts; choose **Sort: name**, **Sort: stars** or **Sort: date**, then use the separate **↑ / ↓** button for ascending or descending order. For the most-starred repositories first, choose stars and **↓**. Direction stays unchanged when switching sort fields. Hover the star count for its meaning, or the availability and catalog labels for plain-language explanations.
+- Cards show repository star counts; choose **Sort: name**, **Sort: stars**, **Sort: hearts** or **Sort: date**, then use the separate **↑ / ↓** button for ascending or descending order. For the most-starred repositories first, choose stars and **↓**. Direction stays unchanged when switching sort fields. Hover a count for its meaning, or the availability and catalog labels for plain-language explanations.
+- Hearts are anonymous aggregate interactions reported by the omarchyplugins.com marketplace engagement API — not downloads, installs, unique people, or safety signals. "—" means the marketplace has no record for that plugin. Heart data refreshes alongside the catalog and is cached locally; if the engagement API is unreachable, the last saved counts stay visible and the catalog is unaffected. A **♥ Send a heart** button on catalog-listed details sends one anonymous heart after explicit consent (reported as an anonymous heart from the plugins.omarchy.org origin; rate-limited; one per plugin per computer); it never affects installs or verification.
 - Down from search moves to cards; arrows navigate, Enter/Space open details. Click a card for the same view.
 - Tab moves between controls. Ctrl+F returns to search; F5 refreshes. Escape cancels consent, returns from details, clears search, then closes.
 - Details show source, preview or fallback, local version/state, upstream checks and exact review/observed commits when supplied.

@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+SOURCE=https://api.omarchyplugins.com/v1/stats
+EVENTS=https://api.omarchyplugins.com/v1/events
+ORIGIN=https://plugins.omarchy.org
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/oma_plug_sea
+CACHE="$CACHE_DIR/engagement.json"
+LOCK="$CACHE_DIR/engagement.lock"
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/oma_plug_sea
+HEARTED="$STATE_DIR/hearts.json"
+normalize() { jq -e --arg source "$SOURCE" --arg now "$(date -u +%FT%TZ)" -f "$ROOT/lib/engagement.jq" "$1"; }
+valid_cache() { [[ -f $CACHE ]] && jq -e '.schemaVersion==1 and (.hearts|type)=="object"' "$CACHE" >/dev/null 2>&1; }
+valid_id() { [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $1 != *..* ]]; }
+fallback() {
+  if valid_cache; then jq --arg error "$1" '.ok=false | .stale=true | .error=$error' "$CACHE"
+  else jq -n --arg source "$SOURCE" --arg error "$1" '{schemaVersion:1,ok:false,source:$source,fetchedAt:"",stale:true,error:$error,hearts:{}}'; fi
+}
+heart_envelope() { jq -n --argjson ok "$1" --arg id "$2" --argjson already "$3" --argjson recorded "$4" --argjson hearts "$5" --arg error "$6" '{ok:$ok,id:$id,already:$already,recorded:$recorded,hearts:$hearts,error:$error}'; }
+hearts_state() {
+  umask 077
+  mkdir -p "$STATE_DIR"
+  if [[ -f $HEARTED ]] && jq -e 'type=="object"' "$HEARTED" >/dev/null 2>&1; then
+    jq --arg now "$(date -u +%FT%TZ)" '{ok:true,hearted:.,fetchedAt:$now}' "$HEARTED"
+  else
+    jq -n --arg now "$(date -u +%FT%TZ)" '{ok:true,hearted:{},fetchedAt:$now}'
+  fi
+}
+record_hearted() {
+  umask 077
+  mkdir -p "$STATE_DIR"
+  local tmp_state
+  tmp_state=$(mktemp "$STATE_DIR/.hearts.XXXXXX")
+  if [[ -f $HEARTED ]] && jq -e 'type=="object"' "$HEARTED" >/dev/null 2>&1; then
+    if jq --arg id "$1" '. + {($id):true}' "$HEARTED" >"$tmp_state" 2>/dev/null; then
+      mv -f -- "$tmp_state" "$HEARTED"
+    else
+      rm -f -- "$tmp_state"
+    fi
+  else
+    if jq -n --arg id "$1" '{($id):true}' >"$tmp_state" 2>/dev/null; then
+      mv -f -- "$tmp_state" "$HEARTED"
+    else
+      rm -f -- "$tmp_state"
+    fi
+  fi
+}
+bump_cache() {
+  if [[ $2 =~ ^[0-9]+$ ]] && valid_cache; then
+    local tmp_c
+    tmp_c=$(mktemp "$CACHE_DIR/.engagement-c.XXXXXX")
+    if jq --arg id "$1" --argjson total "$2" '.hearts[$id]=$total' "$CACHE" >"$tmp_c" 2>/dev/null; then
+      mv -f -- "$tmp_c" "$CACHE"
+    else
+      rm -f -- "$tmp_c"
+    fi
+  fi
+}
+send_heart() {
+  local id=$1 body code total t
+  valid_id "$id" || { heart_envelope false "$id" false false null "Invalid plugin ID."; return; }
+  if [[ -f $HEARTED ]] && jq -e --arg id "$id" '.[$id]==true' "$HEARTED" >/dev/null 2>&1; then
+    heart_envelope false "$id" true false null "Already hearted on this computer."
+    return
+  fi
+  body=$(jq -n --arg id "$id" --compact-output '{pluginId:$id,type:"heart"}')
+  if ! code=$(curl --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 25 --max-filesize 65536 -X POST -H "Origin: $ORIGIN" -H 'Content-Type: application/json' --data "$body" -o "$raw" -w '%{http_code}' "$EVENTS" 2>"$errors"); then
+    heart_envelope false "$id" false false null "Could not send heart: $(head -c 1000 "$errors") No heart was recorded."
+    return
+  fi
+  case $code in
+    200|202)
+      if jq -e '.recorded==true' "$raw" >/dev/null 2>&1; then
+        total=null
+        t=$(jq -r '.plugin.hearts | if type=="number" and isfinite and .>=0 then floor else empty end' "$raw" 2>/dev/null || true)
+        if [[ $t =~ ^[0-9]+$ ]]; then total=$t; fi
+        record_hearted "$id"
+        if [[ $total != null ]]; then bump_cache "$id" "$total"; fi
+        heart_envelope true "$id" false true "$total" ""
+      else
+        heart_envelope false "$id" false false null "The marketplace rate limit refused the heart; try again later."
+      fi
+      ;;
+    429)
+      heart_envelope false "$id" false false null "The marketplace rate limit refused the heart (HTTP 429); try again later."
+      ;;
+    *)
+      heart_envelope false "$id" false false null "The marketplace returned HTTP ${code} without a usable heart response; the heart may not have been recorded."
+      ;;
+  esac
+}
+mode=refresh
+heart_id=""
+case ${1:-refresh} in
+cached) [[ $# == 1 ]] || exit 2; fallback "Showing the last saved engagement stats. Refresh to check for changes."; exit ;;
+hearts-state) [[ $# == 1 ]] || exit 2; hearts_state; exit ;;
+heart) [[ $# == 2 ]] || exit 2; mode=heart; heart_id=$2 ;;
+refresh) [[ $# -le 1 ]] || exit 2 ;;
+*) echo 'Usage: oma-plug-sea-engagement refresh|cached|heart ID|hearts-state' >&2; exit 2 ;;
+esac
+umask 077
+mkdir -p "$CACHE_DIR"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  if [[ $mode == heart ]]; then
+    heart_envelope false "$heart_id" false false null "Another engagement refresh is running; the heart was not sent."
+  else
+    fallback 'Another engagement refresh is running.'
+  fi
+  exit
+fi
+raw=$(mktemp "$CACHE_DIR/.engagement.XXXXXX")
+normalized=$(mktemp "$CACHE_DIR/.engagement-n.XXXXXX")
+errors=$(mktemp "$CACHE_DIR/.engagement-e.XXXXXX")
+trap 'rm -f -- "$raw" "$normalized" "$errors"' EXIT
+if [[ $mode == heart ]]; then send_heart "$heart_id"; exit; fi
+if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 25 --max-filesize 1048576 "$SOURCE" -o "$raw" 2>"$errors"; then
+  fallback "Engagement refresh failed: $(head -c 1000 "$errors")"; exit
+fi
+if ! normalize "$raw" >"$normalized" 2>"$errors"; then
+  fallback "Engagement data was rejected; saved stats retained. $(head -c 1000 "$errors")"; exit
+fi
+mv -f -- "$normalized" "$CACHE"
+cat "$CACHE"

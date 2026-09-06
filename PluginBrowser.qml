@@ -47,6 +47,14 @@ Item {
     property bool checking: false
     property string checkError: ""
     property string checkedAt: ""
+    property var engagement: ({})
+    property bool engagementStale: false
+    property string engagementError: ""
+    property var hearted: ({})
+    property bool heartPending: false
+    property string heartError: ""
+    property string pendingHeart: ""
+    property var pendingHeartPrior: null
     property bool refreshQueued: false
     property bool checkAfterRefresh: false
     property int catalogGeneration: 0
@@ -58,13 +66,15 @@ Item {
     property string pendingAction: ""
     property var pendingPlugin: null
     property bool actionPending: false
-    readonly property bool busy: actionProcess.running || actionPending
+    readonly property bool busy: actionProcess.running || actionPending || heartProcess.running || heartPending
     readonly property string helperDir: decodeURIComponent(Qt.resolvedUrl("bin/").toString().replace(/^file:\/\//, ""))
     function open(payload) {
         try { var options = JSON.parse(payload || "{}"); requestedWidth = Math.max(620, Math.min(1600, Number(options.width) || 1120)); requestedHeight = Math.max(480, Math.min(1200, Number(options.height) || 820)); } catch (e) {}
         opened = true;
         if (catalog.length || fetchedAt) {
             checkCatalog();
+            engagementProcess.running = true;
+            heartedProcess.running = true;
             localState.requestRead();
         } else {
             checkAfterRefresh = true;
@@ -115,10 +125,12 @@ Item {
         refreshing = true;
         catalogProcess.command = [helperDir + "oma-plug-sea-catalog", "refresh"];
         catalogProcess.running = true;
+        engagementProcess.running = true;
+        heartedProcess.running = true;
         localState.requestRead();
     }
     function rebuild() {
-        rows = Catalog.correlate(catalog, localPlugins);
+        rows = Catalog.correlate(catalog, localPlugins, root.engagement);
         categoryOptions = Catalog.categories(rows);
         filtered = Catalog.filter(rows, query, category, scope, sort, sortDirection);
         if (detail) {
@@ -139,6 +151,7 @@ Item {
         if (!pendingPlugin) return "";
         var p = pendingPlugin;
         if (pendingAction === "remove") return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
+        if (pendingAction === "heart") return "Send an anonymous heart for " + p.name + " (" + p.id + ") to the marketplace? The request is reported to the marketplace as an anonymous heart from the plugins.omarchy.org origin; the marketplace rate-limits hearts and records no account or identity alongside the heart.";
         return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
     }
     function runAction(action, plugin) {
@@ -155,6 +168,43 @@ Item {
         actionPending = true;
         localState.beginMutation();
         actionProcess.running = true;
+    }
+    function runHeart(plugin) {
+        if (busy || refreshing || checking || !plugin || plugin.localOnly) return;
+        var id = plugin.id;
+        if (!id || hearted[id]) return;
+        pendingAction = "";
+        pendingHeart = id;
+        pendingHeartPrior = (typeof engagement[id] === "number") ? engagement[id] : null;
+        // Optimistic update: show the heart immediately; the exit handler
+        // applies the server total on success or rolls back on failure.
+        var next = Object.assign({}, engagement);
+        next[id] = (typeof next[id] === "number" ? next[id] : 0) + 1;
+        engagement = next;
+        var marked = Object.assign({}, hearted);
+        marked[id] = true;
+        hearted = marked;
+        heartPending = true;
+        heartError = "";
+        operationMessage = "Sending heart · " + (plugin.name || id) + "…";
+        rebuild();
+        heartProcess.command = [helperDir + "oma-plug-sea-engagement", "heart", id];
+        heartProcess.running = true;
+    }
+    function rollbackHeart(keepHearted) {
+        // Undo the optimistic +1 from runHeart: restore the exact prior
+        // value (absent records go back to untracked, not zero).
+        var id = pendingHeart;
+        if (!id) return;
+        var next = Object.assign({}, engagement);
+        if (pendingHeartPrior == null) delete next[id];
+        else next[id] = pendingHeartPrior;
+        engagement = next;
+        if (!keepHearted) {
+            var marked = Object.assign({}, hearted);
+            delete marked[id];
+            hearted = marked;
+        }
     }
     onQueryChanged: rebuild()
     onCategoryChanged: rebuild()
@@ -193,6 +243,76 @@ Item {
                 root.checkAfterRefresh = false;
                 root.checkCatalog();
             }
+            });
+        }
+    }
+    Process {
+        id: engagementProcess
+        command: [root.helperDir + "oma-plug-sea-engagement", "refresh"]
+        stdout: StdioCollector { id: engagementOutput; waitForEnd: true }
+        stderr: StdioCollector { id: engagementStderr; waitForEnd: true }
+        onExited: function(code) {
+            Qt.callLater(function() {
+            var result = root.parseResult(engagementOutput.text, "Engagement stats failed. " + engagementStderr.text);
+            if (result.ok && code === 0) {
+                root.engagement = result.hearts || {};
+                root.engagementStale = false;
+                root.engagementError = "";
+            } else {
+                // A failed refresh never blocks the catalog. The stale fallback
+                // still carries last-saved hearts from cache, so keep showing them.
+                if (result.hearts && Object.keys(result.hearts).length) root.engagement = result.hearts;
+                root.engagementStale = true;
+                root.engagementError = result.error || "Engagement stats are unavailable.";
+            }
+            root.rebuild();
+            });
+        }
+    }
+    Process {
+        id: heartProcess
+        stdout: StdioCollector { id: heartOutput; waitForEnd: true }
+        stderr: StdioCollector { id: heartStderr; waitForEnd: true }
+        onExited: function(code) {
+            Qt.callLater(function() {
+            var result = root.parseResult(heartOutput.text, "Heart failed. " + heartStderr.text);
+            var id = result.id || root.pendingHeart;
+            if (result.ok && code === 0) {
+                // The server total wins when the envelope carries one.
+                if (typeof result.hearts === "number") {
+                    var next = Object.assign({}, root.engagement);
+                    next[id] = result.hearts;
+                    root.engagement = next;
+                }
+                root.operationMessage = "Heart recorded · " + id;
+                root.heartError = "";
+            } else if (result.already) {
+                // Refused by the local duplicate guard: no heart was sent, so
+                // drop the optimistic +1 but keep the hearted flag.
+                root.rollbackHeart(true);
+                root.operationMessage = "Already hearted · " + id + " — no heart was sent.";
+                root.heartError = "";
+            } else {
+                root.rollbackHeart(false);
+                root.heartError = result.error || "Heart failed.";
+                root.operationMessage = "Heart failed · " + root.heartError;
+            }
+            root.pendingHeart = "";
+            root.pendingHeartPrior = null;
+            root.heartPending = false;
+            root.rebuild();
+            });
+        }
+    }
+    Process {
+        id: heartedProcess
+        command: [root.helperDir + "oma-plug-sea-engagement", "hearts-state"]
+        stdout: StdioCollector { id: heartedOutput; waitForEnd: true }
+        stderr: StdioCollector { id: heartedStderr; waitForEnd: true }
+        onExited: function(code) {
+            Qt.callLater(function() {
+            var result = root.parseResult(heartedOutput.text, "");
+            if (result.ok && code === 0 && result.hearted) root.hearted = result.hearted;
             });
         }
     }
@@ -332,7 +452,7 @@ Item {
                     RowLayout {
                         visible: !root.detail; Layout.fillWidth: true; spacing: 12
                         Ui.Dropdown { Layout.preferredWidth: 165; label: "State"; showLabel: false; value: root.scope; options: ["All plugins", "Installed", "Available"]; onChanged: function(value) { root.scope = value; } }
-                        Ui.Dropdown { Layout.preferredWidth: 175; label: "Sort"; showLabel: false; value: root.sort; options: [{value:"Name", label:"Sort: name"}, {value:"Most stars", label:"Sort: stars"}, {value:"Recently listed", label:"Sort: date"}]; onChanged: function(value) { root.sort = value; } }
+                        Ui.Dropdown { Layout.preferredWidth: 175; label: "Sort"; showLabel: false; value: root.sort; options: [{value:"Name", label:"Sort: name"}, {value:"Most stars", label:"Sort: stars"}, {value:"Most hearts", label:"Sort: hearts"}, {value:"Recently listed", label:"Sort: date"}]; onChanged: function(value) { root.sort = value; } }
                         Ui.Button {
                             text: root.sortDirection === "Ascending" ? "↑" : "↓"
                             bordered: true; focusable: true
@@ -345,7 +465,7 @@ Item {
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: (root.stale ? "OFFLINE / STALE · " : "COMMUNITY CATALOG · ") + (root.fetchedAt ? "Refreshed " + root.fetchedAt : catalogProcess.running ? "Loading catalog…" : "No catalog loaded") + (root.catalogError ? "\n" + root.catalogError : "") + (root.localError ? "\n" + root.localError : "") + (root.refreshNeeded ? "\nNew catalog data is available. Select Refresh available to load it." : root.checkError ? "\nSource check failed: " + root.checkError : root.checking ? " · Checking source…" : root.checkedAt ? " · Source checked " + root.checkedAt : "")
+                        text: (root.stale ? "OFFLINE / STALE · " : "COMMUNITY CATALOG · ") + (root.fetchedAt ? "Refreshed " + root.fetchedAt : catalogProcess.running ? "Loading catalog…" : "No catalog loaded") + (root.catalogError ? "\n" + root.catalogError : "") + (root.localError ? "\n" + root.localError : "") + (root.engagementStale ? "\n" + (root.engagementError || "Hearts unavailable; showing last saved engagement stats.") : "") + (root.refreshNeeded ? "\nNew catalog data is available. Select Refresh available to load it." : root.checkError ? "\nSource check failed: " + root.checkError : root.checking ? " · Checking source…" : root.checkedAt ? " · Source checked " + root.checkedAt : "")
                         textFormat: Text.PlainText; wrapMode: Text.WordWrap; maximumLineCount: 3; elide: Text.ElideRight
                         color: root.stale || root.localError || root.refreshNeeded || root.checkError ? Color.accent : Color.foreground; opacity: 0.65; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall
                     }
@@ -370,6 +490,7 @@ Item {
                     PluginDetails {
                         id: pluginDetails; visible: !!root.detail; Layout.fillWidth: true; Layout.fillHeight: true
                         plugin: root.detail || ({}); busy: root.busy || root.refreshing || root.checking || !!root.localError
+                        hearted: !!root.detail && !!root.hearted[root.detail.id]
                         onActionRequested: function(action) { root.requestAction(action); }
                         onPreviewRequested: function(source) { root.showPreview(source); }
                     }
@@ -405,7 +526,7 @@ Item {
                         Layout.fillWidth: true
                         Item { Layout.fillWidth: true }
                         Ui.Button { id: cancelButton; text: root.diagnosticVisible ? "Close" : "Cancel"; bordered: true; focusable: true; onClicked: root.cancelModal(); Keys.onEscapePressed: root.cancelModal() }
-                        Ui.Button { visible: !root.diagnosticVisible; text: root.pendingAction === "install" ? "Accept · install disabled" : root.pendingAction === "remove" ? "Remove plugin" : "Accept · " + root.pendingAction; bordered: true; focusable: true; onClicked: root.runAction(root.pendingAction, root.pendingPlugin); Keys.onEscapePressed: root.cancelModal() }
+                        Ui.Button { visible: !root.diagnosticVisible; text: root.pendingAction === "install" ? "Accept · install disabled" : root.pendingAction === "remove" ? "Remove plugin" : root.pendingAction === "heart" ? "Send heart" : "Accept · " + root.pendingAction; bordered: true; focusable: true; onClicked: root.pendingAction === "heart" ? root.runHeart(root.pendingPlugin) : root.runAction(root.pendingAction, root.pendingPlugin); Keys.onEscapePressed: root.cancelModal() }
                     }
                 }
             }

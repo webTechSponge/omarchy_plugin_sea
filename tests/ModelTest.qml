@@ -34,11 +34,21 @@ Item {
             check(Catalog.filter(rows,"","All categories","All plugins","Recently listed")[0].id === "test.two","Date sort");
             check(Catalog.filter(rows,"","All categories","All plugins","Most stars")[0].id === "test.two", "Star sorting compares multiple candidates descending");
             check(Catalog.starCount({stars:-1}) === 0 && Catalog.starCount({stars:"12"}) === 0 && Catalog.starCount({stars:12.8}) === 12, "Star counts remain nonnegative integers");
+            var engaged = Catalog.correlate(remote, local, {"test.one":7, "test.two":0});
+            check(engaged[0].hearts === 7, "Hearts merged from engagement map");
+            check(engaged[1].hearts === 0, "Explicit zero heart is preserved as a number");
+            check(engaged[2].hearts === null, "No engagement record stays null");
+            check(engaged[3].localOnly && engaged[3].hearts === null, "Local-only rows have no engagement hearts");
+            check(Catalog.heartCount({hearts:-2}) === 0 && Catalog.heartCount({hearts:"9"}) === 0 && Catalog.heartCount({}) === 0 && Catalog.heartCount({hearts:7.9}) === 7, "Heart counts remain nonnegative integers");
             var ordered = [{id:"b",name:"Beta",stars:9,listedAt:"2026-09-02"}, {id:"a",name:"Alpha",stars:2,listedAt:"2026-09-01"}];
             ["Name", "Most stars", "Recently listed"].forEach(function(sort) {
                 check(Catalog.filter(ordered,"","All categories","All plugins",sort,"Ascending")[0].id === "a", sort + " ascending");
                 check(Catalog.filter(ordered,"","All categories","All plugins",sort,"Descending")[0].id === "b", sort + " descending");
             });
+            var heartOrdered = [{id:"b",name:"Beta",hearts:9,listedAt:"2026-09-02"}, {id:"a",name:"Alpha",hearts:2,listedAt:"2026-09-01"}, {id:"u",name:"Untracked",hearts:null}];
+            check(Catalog.filter(heartOrdered,"","All categories","All plugins","Most hearts","Descending")[0].id === "b", "Most hearts descending top");
+            check(Catalog.filter(heartOrdered,"","All categories","All plugins","Most hearts","Descending")[2].id === "u", "Untracked hearts sort last descending");
+            check(Catalog.filter(heartOrdered,"","All categories","All plugins","Most hearts","Ascending")[0].id === "u", "Untracked hearts sort first ascending");
             check(Catalog.categories(rows).join("|") === "All categories|Desktop|Local|Tools","Categories unique and sorted");
             check(!Catalog.safeLink("file:///etc/passwd") && !Catalog.safeLink("javascript:alert(1)") && Catalog.safeLink("https://github.com/test/repo"),"Only HTTPS links");
             var listed = {id:"test.source", repo:"https://github.com/Original/Plugin.git/", verificationStatus:"Verified"};
