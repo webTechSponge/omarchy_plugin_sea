@@ -117,10 +117,40 @@ With the shell running, this hides/disables the browser, moves its managed copy 
 
 ## Known limits
 
-- Current installation uses mutable HTTPS GitHub repositories; manual suites/subdirectory listings remain browse-only.
-- No signed registry or reliable pre-update availability badge exists on this platform.
-- The browser protects itself from in-app disable/remove; use its development uninstall command.
-- Catalog-provided capability/check metadata is incomplete. Missing fields are reported as unknown rather than inferred guarantees.
-- CLI mutation locks cover this application's operations only. External terminal actions can race and will be caught where possible by postcondition checks.
+These limits mostly concern installing and updating plugins. You can still browse the catalog, inspect details and previews, and search cached listings offline.
 
-MIT licensed. No publication, remote push, marketplace submission, or third-party installation is performed by development setup.
+### Some plugins need manual installation
+
+The app can install plugins whose GitHub repositories follow the structure supported by Omarchy's installer. Some listings contain several plugins in one repository, need custom setup, or replace a larger part of the desktop. You can browse those listings and open their source, but you must follow the author's installation instructions yourself. The **Available** filter shows only listings supported by the in-app installer.
+
+### Catalog checks do not guarantee the code you install
+
+When you install or update a plugin, Omarchy fetches the repository's current code. Its author may have changed that code since the catalog checked it. A **verified** catalog label therefore does not mean the plugin is safe, or that your installed version was checked.
+
+The current installer does not use signed releases that would let it authenticate the exact version described by the catalog. Community plugins run with your user account's permissions when enabled, so only enable code you trust. **Install disabled** lets you inspect the downloaded code before enabling it; it does not make that code safe automatically.
+
+### A catalog refresh is different from a plugin update
+
+**Refresh available** means the catalog has changed—for example, a new plugin was listed or a description was updated. It does not necessarily mean any of your installed plugins have updates.
+
+The app cannot reliably show an update-available badge for each installed plugin in advance. **Check & update** checks the installed plugin's repository and applies an update if one is available; it is not a check-only action. Updating an enabled plugin may run its new code immediately, so the app asks for consent first.
+
+### Remove Plugin Sea from the terminal
+
+Plugin Sea cannot disable or uninstall itself through its own interface. Doing so could interrupt an operation before it finishes or reports its result.
+
+To remove it, run `mise run uninstall` from this project's directory while the Omarchy shell is running. This removes its managed installation, launcher and menu entry while retaining recovery backups. See [Removal and recovery](#removal-and-recovery) for details.
+
+### Missing information does not mean missing permissions
+
+Some catalog entries omit compatibility results, capabilities or other details. The app reports those fields as unknown. For example, missing information about file access does **not** mean a plugin cannot read your files: enabled community plugins run with your account's permissions.
+
+### Avoid changing the same plugin in two places at once
+
+The app prevents its own management operations from overlapping, but it cannot stop a terminal command or another program from changing the same plugin.
+
+For example, a plugin's Git origin could change while its update consent dialog is open. The app checks the origin again and refuses the update if it detects a change. However, Omarchy's update command cannot make that check and the subsequent fetch one indivisible operation, so an external change in between can still slip through. Avoid managing the same plugin simultaneously through the app and a terminal.
+
+Setting up Plugin Sea does not publish your project, push code to GitHub, submit a marketplace listing, or install community plugins. Those are separate actions you choose.
+
+MIT licensed.
