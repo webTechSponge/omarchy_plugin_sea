@@ -3,7 +3,7 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 command -v wtype >/dev/null
-bin/oma-plug-sea
+scripts/open-verified-runtime
 assert_status() {
   for ((attempt=0;attempt<100;attempt++)); do
     if omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e "$1" >/dev/null; then return 0; fi
@@ -11,18 +11,26 @@ assert_status() {
   done
   echo "UI postcondition failed: $1" >&2; exit 1
 }
+send_keys() {
+  # Refuse input if a rescan replaced the overlay or dismissed the tested UI.
+  scripts/verify-runtime >/dev/null
+  timeout 5 omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e '.opened==true' >/dev/null || {
+    echo 'Refusing keyboard input: tested browser is no longer open.' >&2; exit 1;
+  }
+  wtype "$@"
+}
 assert_status '.opened and .count>0'
 sleep 0.3
-wtype -M ctrl -k f -m ctrl -M ctrl -k a -m ctrl -d 20 weather
+send_keys -M ctrl -k f -m ctrl -M ctrl -k a -m ctrl -d 20 weather
 assert_status '.search=="weather" and .count>0 and .count<200'
-wtype -k Down -k Right -k Return
+send_keys -k Down -k Right -k Return
 assert_status '.detail!=null'
-wtype -k Escape
+send_keys -k Escape
 assert_status '.detail==null and .opened'
-wtype -M ctrl -k f -m ctrl -M ctrl -k a -m ctrl -d 20 zzz_oma_plug_sea_no_matches
+send_keys -M ctrl -k f -m ctrl -M ctrl -k a -m ctrl -d 20 zzz_oma_plug_sea_no_matches
 assert_status '.count==0'
-wtype -k Escape
+send_keys -k Escape
 assert_status '.search=="" and .count>0'
-wtype -k Escape
+send_keys -k Escape
 assert_status '.opened==false'
 printf 'Keyboard search/arrows/Enter/details/Escape/empty-state checks passed.\n'

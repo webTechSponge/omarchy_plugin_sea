@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Hash exactly the runtime copy, normalizing the install-stamped QML literal.
+set -euo pipefail
+root=${1:-$(cd -- "$(dirname -- "$0")/.." && pwd -P)}
+cd -- "$root"
+{
+  printf '%s\0' manifest.json PluginBrowser.qml
+  find components js bin lib -type f ! -path '*/.preview-decode*/*' ! -name '.preview-decode*' ! -name 'preview-decode.build-id' -print0
+  printf '%s\0' assets/branding/wordmark-pluginsea-v3.png assets/branding/icon-pluginsea-v3.png
+} | LC_ALL=C sort -z | while IFS= read -r -d '' file; do
+  [[ -f $file && ! -L $file ]] || { echo "Missing or unsafe runtime file: $file" >&2; exit 1; }
+  if [[ $file == PluginBrowser.qml ]]; then
+    hash=$(perl -0777 -pe 's/(readonly property string runtimeFingerprint:\s*")[^"]*(")/${1}__OMA_PLUG_SEA_RUNTIME_FINGERPRINT__${2}/' "$file" | sha256sum)
+  else
+    hash=$(sha256sum -- "$file")
+  fi
+  printf '%s\0%s\0%s\0' "$file" "${hash%% *}" "$(stat -c '%a' -- "$file")"
+done | sha256sum | cut -d ' ' -f 1

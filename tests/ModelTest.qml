@@ -1,7 +1,15 @@
 import QtQuick
+import "../components"
 import "../js/CatalogModel.js" as Catalog
 Item {
     property int assertions: 0
+    property int reads: 0
+    property var accepted: []
+    LocalStateCoordinator {
+        id: localState
+        onReadRequested: reads++
+        onResultAccepted: function(result) { accepted = accepted.concat([result]); }
+    }
     function check(value, message) { if (!value) throw new Error(message); assertions += 1; }
     Timer { interval: 1; running: true; onTriggered: {
         try {
@@ -58,6 +66,36 @@ Item {
             check(forked.verificationStatus === "Verified" && forked.local.repo === "https://github.com/Fork/Plugin" && forked.id === listed.id, "Catalog presentation and ID correlation retained");
             var unknownCatalog = {local:{repo:"https://github.com/owner/repo"}, repo:""};
             check(!Catalog.sourceMatches(unknownCatalog) && Catalog.provenanceNote(unknownCatalog).indexOf("unknown") >= 0, "Unknown catalog origin is not claimed as a confirmed mismatch");
+            ["quarantined", "yanked", "unavailable", "quarantined by upstream"].forEach(function(status) {
+                var row = Object.assign({}, matched, {status:status});
+                check(Catalog.status(row).indexOf("Enabled") >= 0 && Catalog.status(row).indexOf(status) >= 0, "Installed state retains catalog lifecycle: " + status);
+                check(Catalog.lifecycleWarning(row).indexOf(status) >= 0 && Catalog.lifecycleWarning(row).indexOf("disable or remove") >= 0, "Independent warning preserves recovery: " + status);
+                row.local = Object.assign({}, row.local, {enabled:false});
+                check(Catalog.status(row).indexOf("disabled") >= 0 && Catalog.lifecycleWarning(row).length > 0, "Disabled installation retains warning");
+            });
+            check(Catalog.lifecycleWarning(Object.assign({}, forked, {status:"quarantined"})).indexOf("not confirmed to match") >= 0, "Fork warning identifies catalog association limitation");
+            check(Catalog.lifecycleWarning(Object.assign({}, matched, {status:"active"})) === "", "Active listing has no lifecycle warning");
+            check(Catalog.lifecycleWarning(standalone) === "", "Local-only source does not inherit lifecycle warning");
+
+            // Deliberately reverse completion: mutation confirms removal before
+            // an older local read returns the formerly enabled plugin.
+            localState.requestRead();
+            check(reads === 1, "Initial read starts");
+            localState.beginMutation();
+            localState.finishMutation();
+            check(reads === 1 && localState.queued, "Post-action read waits for old process completion");
+            localState.completeRead({plugins:[{id:"old",enabled:true}]});
+            check(accepted.length === 0 && reads === 2, "Stale pre-action result discarded; mandatory fresh read starts");
+            localState.completeRead({plugins:[]});
+            check(accepted.length === 1 && accepted[0].plugins.length === 0, "Fresh confirmed removed state accepted");
+            localState.requestRead();
+            localState.beginMutation();
+            localState.completeRead({ok:false,error:"obsolete failure"});
+            check(accepted.length === 1 && reads === 3, "Stale error during mutation cannot overwrite state or start conflicting read");
+            localState.finishMutation();
+            check(reads === 4, "Mutation completion starts fresh read when old read finished first");
+            localState.completeRead({plugins:[{id:"new",enabled:false}]});
+            check(accepted.length === 2 && accepted[1].plugins[0].enabled === false, "Latest disabled state accepted");
             console.log("PASS: " + assertions + " catalog model behavior assertions");
             Qt.exit(0);
         } catch (error) { console.error(error); Qt.exit(1); }

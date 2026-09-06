@@ -26,6 +26,17 @@ for asset in wordmark-pluginsea-v3.png icon-pluginsea-v3.png; do
   cp -- "$project/assets/branding/$asset" "$stage/assets/branding/$asset"
 done
 rm -f -- "$stage/lib/.preview-decode.lock" "$stage/lib/preview-decode.build-id"
+fingerprint=$("$project/scripts/runtime-fingerprint" "$stage")
+[[ $(grep -Fc '__OMA_PLUG_SEA_RUNTIME_FINGERPRINT__' "$stage/PluginBrowser.qml") == 1 ]] || { echo 'Missing unique runtime fingerprint placeholder.' >&2; exit 1; }
+sed -i "s/__OMA_PLUG_SEA_RUNTIME_FINGERPRINT__/$fingerprint/" "$stage/PluginBrowser.qml"
+# Every QML import, JS module and helper now has a build-specific URL. A cached
+# imported component from an earlier install cannot satisfy this build's imports.
+runtime="$stage/runtime/$fingerprint"
+mkdir -p "$runtime"
+for part in PluginBrowser.qml components js bin lib assets; do mv -- "$stage/$part" "$runtime/"; done
+cp -- "$stage/manifest.json" "$runtime/manifest.json"
+jq --arg entry "runtime/$fingerprint/PluginBrowser.qml" '.entryPoints.overlay=$entry' "$stage/manifest.json" > "$stage/.manifest.tmp"
+mv -- "$stage/.manifest.tmp" "$stage/manifest.json"
 printf '%s\n' "$project" > "$stage/.oma-plug-sea-managed"
 omarchy plugin validate "$stage"
 backup "$config_home/omarchy/shell.json"
@@ -37,7 +48,10 @@ backup "$launcher"
 cat > "$launcher" <<'LAUNCH'
 #!/usr/bin/env bash
 # oma-plug-sea managed launcher
-exec "$HOME/.config/omarchy/plugins/local.oma-plug-sea/bin/oma-plug-sea" "$@"
+set -euo pipefail
+plugin="$HOME/.config/omarchy/plugins/local.oma-plug-sea"
+build=$(jq -er '.entryPoints.overlay | capture("^runtime/(?<build>[a-f0-9]{64})/PluginBrowser.qml$").build' "$plugin/manifest.json")
+exec "$plugin/runtime/$build/bin/oma-plug-sea" "$@"
 LAUNCH
 chmod +x "$launcher"
 if [[ ! -f $menu_file ]]; then printf '{\n}\n' > "$menu_file"; fi

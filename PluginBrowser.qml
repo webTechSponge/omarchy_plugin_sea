@@ -14,6 +14,7 @@ Item {
     property var shell: null
     property var manifest: null
     property var pluginRegistry: null
+    readonly property string runtimeFingerprint: "__OMA_PLUG_SEA_RUNTIME_FINGERPRINT__"
     property bool opened: false
     property int requestedWidth: 1120
     property int requestedHeight: 820
@@ -63,14 +64,14 @@ Item {
         opened = true;
         if (catalog.length || fetchedAt) {
             checkCatalog();
-            if (!localProcess.running && !busy) localProcess.running = true;
+            localState.requestRead();
         } else {
             checkAfterRefresh = true;
             refresh();
         }
         Qt.callLater(function() { if (root.previewSource && imageViewer.item) imageViewer.item.forceActiveFocus(); else if (root.detail) mainFocus.forceActiveFocus(); else search.forceActiveFocus(); });
     }
-    function status(arg) { return JSON.stringify({opened:opened, search:query, category:category, scope:scope, sort:sort, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
+    function status(arg) { return JSON.stringify({runtimeFingerprint:runtimeFingerprint, opened:opened, search:query, category:category, scope:scope, sort:sort, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
     function close() { previewSource = ""; opened = false; }
     function dismiss() {
         if (busy) { operationMessage = "Please wait for the current action to finish."; return; }
@@ -113,7 +114,7 @@ Item {
         refreshing = true;
         catalogProcess.command = [helperDir + "oma-plug-sea-catalog", "refresh"];
         catalogProcess.running = true;
-        if (!localProcess.running) localProcess.running = true;
+        localState.requestRead();
     }
     function rebuild() {
         rows = Catalog.correlate(catalog, localPlugins);
@@ -136,8 +137,8 @@ Item {
     function consentText() {
         if (!pendingPlugin) return "";
         var p = pendingPlugin;
-        if (pendingAction === "remove") return "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
-        return "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
+        if (pendingAction === "remove") return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
+        return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
     }
     function runAction(action, plugin) {
         if (busy || refreshing || checking) return;
@@ -151,6 +152,7 @@ Item {
         operationMessage = action + " · " + plugin.name + " — waiting for the CLI and confirmed local state…";
         actionProcess.command = args;
         actionPending = true;
+        localState.beginMutation();
         actionProcess.running = true;
     }
     onQueryChanged: rebuild()
@@ -166,7 +168,7 @@ Item {
     }
     Connections {
         target: root.pluginRegistry
-        function onPluginsChanged() { if (root.opened && !root.busy && !localProcess.running) localProcess.running = true; }
+        function onPluginsChanged() { if (root.opened) localState.requestRead(); }
     }
     Process {
         id: catalogProcess
@@ -218,6 +220,15 @@ Item {
             });
         }
     }
+    LocalStateCoordinator {
+        id: localState
+        onReadRequested: localProcess.running = true
+        onResultAccepted: function(result) {
+            if (result.ok) root.localPlugins = result.plugins || [];
+            root.localError = result.ok ? "" : result.error || "Cannot read local plugins. Is omarchy-shell running?";
+            root.rebuild();
+        }
+    }
     Process {
         id: localProcess; command: [root.helperDir + "oma-plug-sea-local"]
         stdout: StdioCollector { id: localOutput; waitForEnd: true }
@@ -225,9 +236,8 @@ Item {
         onExited: function(code) {
             Qt.callLater(function() {
             var result = root.parseResult(localOutput.text, "Local state unavailable. " + localStderr.text);
-            if (result.ok) root.localPlugins = result.plugins || [];
-            root.localError = result.ok ? "" : result.error || "Cannot read local plugins. Is omarchy-shell running?";
-            root.rebuild();
+            if (code !== 0) result.ok = false;
+            localState.completeRead(result);
             });
         }
     }
@@ -242,8 +252,8 @@ Item {
             root.diagnostics = [result.stdout || "", result.stderr || "", actionStderr.text || ""].filter(function(t) { return t; }).join("\n");
             if (result.plugins) root.localPlugins = result.plugins;
             root.rebuild();
-            if (!localProcess.running) localProcess.running = true;
             root.actionPending = false;
+            localState.finishMutation();
             });
         }
     }

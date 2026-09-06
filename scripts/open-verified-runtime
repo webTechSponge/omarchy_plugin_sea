@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Retry a summon if an asynchronous registry rescan briefly unloads the overlay.
+set -euo pipefail
+project=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
+"$project/scripts/verify-runtime" --installed >/dev/null
+for ((attempt=0;attempt<20;attempt++)); do
+  if "$project/bin/oma-plug-sea" >/dev/null 2>&1 && "$project/scripts/verify-runtime" >/dev/null 2>&1; then
+    sleep 0.25
+    if "$project/scripts/verify-runtime" >/dev/null 2>&1 && \
+      timeout 5 omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e '.opened==true' >/dev/null; then
+      echo 'Current checkout overlay is open and runtime fingerprint verified.'
+      exit 0
+    fi
+  fi
+  sleep 0.25
+done
+"$project/scripts/verify-runtime" || exit 1
+echo 'The current overlay did not remain open after registry rescan; inspect shell logs.' >&2
+exit 1

@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell.Io
-import "../js/CatalogModel.js" as Catalog
 
 // The isolated Qt helper converts only approved
 // marketplace images into a bounded, atomic PNG cache; browsing executes no
@@ -25,8 +24,8 @@ Item {
     function load() {
         imageSource = "";
         loadFailed = false;
-        if (!Catalog.safeLink(source)) { loadFailed = true; return; }
-        if (!/\.webp(?:[?#]|$)/i.test(source)) { imageSource = source; return; }
+        // Cached catalogs are also untrusted: no remote URL reaches Qt's Image.
+        if (!/^https:\/\/plugins\.omarchy\.org\/assets\/img\/plugins\/[A-Za-z0-9._-]+\.webp$/.test(source) || source.indexOf("..") >= 0) { loadFailed = true; return; }
         if (conversion.running) return;
         requestSource = source;
         requestFullResolution = fullResolution;

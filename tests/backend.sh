@@ -5,6 +5,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 export HOME="$tmp/home" XDG_CACHE_HOME="$tmp/cache" XDG_STATE_HOME="$tmp/state"
 export TEST_ROOT="$tmp" TEST_FIXTURE="$ROOT/fixtures/catalog.json"
+export TEST_REAL_GIT=$(command -v git)
 mkdir -p "$tmp/mock" "$HOME/.config/omarchy/plugins"
 export PATH="$tmp/mock:$PATH"
 cat >"$tmp/mock/curl" <<'MOCK'
@@ -40,6 +41,10 @@ echo ok
 MOCK
 cat >"$tmp/mock/git" <<'MOCK'
 #!/usr/bin/env bash
+if [[ $1 == ls-remote && $2 == --get-url ]]; then
+ if [[ ${TEST_REAL_URL_RESOLUTION:-0} == 1 ]]; then exec "$TEST_REAL_GIT" "$@"; fi
+ printf '%s\n' "${TEST_INSTALL_EFFECTIVE_SOURCE:-${@: -1}}"; exit
+fi
 if [[ $3 == config ]]; then echo "${TEST_GIT_ORIGIN:-https://github.com/test/weather}"; exit; fi
 if [[ $3 == remote && $4 == get-url ]]; then
  printf '%s\n' "${TEST_EFFECTIVE_ORIGIN:-${TEST_GIT_ORIGIN:-https://github.com/test/weather}}"; exit
@@ -67,7 +72,7 @@ action=$1; id=${2:-}
 case $action in
 add)
  id=${TEST_INSTALL_ID:-test.weather}
- mkdir -p "$HOME/.config/omarchy/plugins/$id"
+ mkdir -p "$HOME/.config/omarchy/plugins/$id/.git"
  printf '{"id":"%s","version":"1.0","barWidget":{"defaultSection":"right"}}' "$id" >"$HOME/.config/omarchy/plugins/$id/manifest.json"
  jq --arg id "$id" '.+[{id:$id,name:"Weather",enabled:false,active:false,firstParty:false,canDisable:true,kinds:["bar-widget"]}]' "$TEST_ROOT/local.json" >"$TEST_ROOT/new.json"
  ;;
@@ -183,6 +188,19 @@ printf '{"plugins":[{"id":"test.dormant"}]}' >"$HOME/.config/omarchy/shell.json"
 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok==false and (.error|contains("undiscovered"))' 'dormant references cannot auto-enable cloned code'
 printf '{"retained":"config"}' >"$HOME/.config/omarchy/shell.json"
+# Real Git resolves an approved HTTPS URL to a local transport through insteadOf.
+# The helper must stop before delegating any add/enable action.
+"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" url."file://$tmp/unapproved/".insteadOf https://github.com/test/
+resolved=$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" "$TEST_REAL_GIT" ls-remote --get-url -- https://github.com/test/weather)
+[[ $resolved == "file://$tmp/unapproved/weather" ]]
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" TEST_REAL_URL_RESOLUTION=1 "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("Git rewrites"))' 'real Git insteadOf transport bypass rejected before add'
+[[ ! -e $tmp/argv ]]
+"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" --unset-all url."file://$tmp/unapproved/".insteadOf
+"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" url.https://github.com/unapproved/.insteadOf https://github.com/test/
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" TEST_REAL_URL_RESOLUTION=1 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("different repository"))' 'real Git HTTPS-to-HTTPS rewrite also rejected'
+[[ ! -e $tmp/argv ]]
 TEST_ACTION_FAIL=1 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok==false and (.stderr|contains("validation failure"))' 'subprocess diagnostics'
 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
@@ -229,6 +247,19 @@ assert "$tmp/out" '.ok and (.plugins|length)==0' 'remove postcondition'
 assert "$tmp/out" '.ok==false and (.error|contains("disappeared"))' 'disappeared plugin'
 "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok and .plugins[0].enabled' 'install and enable separately verified'
+"$act" remove test.weather --confirm-remove >/dev/null
+# A clone/source changing during installation stays disabled on provenance failure.
+cp "$tmp/argv" "$tmp/before-provenance"
+TEST_GIT_ORIGIN=https://github.com/test/different "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("provenance differs")) and all(.plugins[];.enabled==false)' 'changed cloned raw origin refuses enable'
+printf 'add\nhttps://github.com/test/weather\n--yes\n' >>"$tmp/before-provenance"
+cmp "$tmp/before-provenance" "$tmp/argv"
+"$act" remove test.weather --confirm-remove >/dev/null
+cp "$tmp/argv" "$tmp/before-provenance"
+TEST_EFFECTIVE_ORIGIN=https://github.com/test/different "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("provenance differs")) and all(.plugins[];.enabled==false)' 'changed cloned effective origin refuses enable'
+printf 'add\nhttps://github.com/test/weather\n--yes\n' >>"$tmp/before-provenance"
+cmp "$tmp/before-provenance" "$tmp/argv"
 "$act" remove test.weather --confirm-remove >/dev/null
 TEST_INSTALL_ID=test.surprise "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok==false and all(.plugins[];.enabled==false)' 'mutable manifest ID cannot auto-enable unexpected plugin'

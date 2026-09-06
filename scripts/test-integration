@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Isolated behavior tests: every integration target and every CLI mutation is mocked.
 set -euo pipefail
-project=$(cd -- "$(dirname -- "$0")/.." && pwd)
+project=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
 [[ -f $project/PluginBrowser.qml ]] || { echo 'PluginBrowser.qml must exist before integration tests run.' >&2; exit 1; }
 test_root=$(mktemp -d)
 trap 'rm -rf -- "$test_root"' EXIT
@@ -16,6 +16,11 @@ if [[ $(basename "$0") == omarchy-shell ]]; then
     ping) echo ok ;;
     rescanPlugins) printf '0\n' > "$HOME/polls" ;;
     hide) : ;;
+    call)
+      if [[ -f $HOME/live-fingerprint ]]; then fingerprint=$(cat "$HOME/live-fingerprint")
+      else fingerprint=$(sed -n 's/^[[:space:]]*readonly property string runtimeFingerprint: "\([a-f0-9]\{64\}\)"[[:space:]]*$/\1/p' "$HOME/.config/omarchy/plugins/local.oma-plug-sea/$(jq -r '.entryPoints.overlay' "$HOME/.config/omarchy/plugins/local.oma-plug-sea/manifest.json")"); fi
+      jq -n --arg fingerprint "$fingerprint" '{runtimeFingerprint:$fingerprint}'
+      ;;
     *) echo 'Unexpected shell command' >&2; exit 2 ;;
   esac
   exit
@@ -24,7 +29,9 @@ fi
 plugin=$HOME/.config/omarchy/plugins/local.oma-plug-sea
 case ${2:-} in
   validate)
-    [[ -f $3/manifest.json && -f $3/PluginBrowser.qml ]]
+    [[ -f $3/manifest.json ]]
+    entry=$(jq -r '.entryPoints.overlay' "$3/manifest.json")
+    [[ -f $3/$entry ]]
     jq -e '.id == "local.oma-plug-sea"' "$3/manifest.json" >/dev/null
     ;;
   list)
@@ -73,10 +80,15 @@ cp "$test_home/.config/omarchy/shell.json" "$test_root/original-shell"
 run dev-install || fail 'first install'
 [[ -f $test_home/.config/omarchy/plugins/local.oma-plug-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
 [[ -x $test_home/.local/bin/oma-plug-sea ]] || fail 'launcher not executable'
+installed_root=$test_home/.config/omarchy/plugins/local.oma-plug-sea
+installed_entry=$(jq -r '.entryPoints.overlay' "$installed_root/manifest.json")
+[[ $installed_entry =~ ^runtime/[a-f0-9]{64}/PluginBrowser.qml$ ]] || fail 'entrypoint lacks unique build URL'
+installed_runtime=$installed_root/${installed_entry%/PluginBrowser.qml}
+[[ ! -e $installed_root/PluginBrowser.qml && ! -e $installed_root/components ]] || fail 'unused unstamped runtime copy remains'
 for asset in wordmark-pluginsea-v3.png icon-pluginsea-v3.png; do
-  cmp -s "$project/assets/branding/$asset" "$test_home/.config/omarchy/plugins/local.oma-plug-sea/assets/branding/$asset" || fail 'branding asset missing or changed in installed copy'
+  cmp -s "$project/assets/branding/$asset" "$installed_runtime/assets/branding/$asset" || fail 'branding asset missing or changed in installed copy'
 done
-installed_lib=$test_home/.config/omarchy/plugins/local.oma-plug-sea/lib
+installed_lib=$installed_runtime/lib
 [[ -x $installed_lib/preview-decode ]] || fail 'native preview decoder not installed'
 "$installed_lib/preview-decode" --check || fail 'installed preview codec check'
 [[ ! -e $installed_lib/.preview-decode.lock && ! -e $installed_lib/preview-decode.build-id ]] || fail 'build state leaked into runtime copy'
@@ -85,6 +97,26 @@ cp "$menu" "$test_root/installed-menu"
 run dev-install || fail 'idempotent install'
 cmp -s "$menu" "$test_root/installed-menu" || fail 'reinstall changed menu'
 [[ $(rg -c 'plugin enable local.oma-plug-sea' "$test_home/cli.log") == 2 ]] || fail 'enable count'
+# Fingerprints must prove both installed bytes and the in-memory QML build.
+run verify-runtime || fail 'current runtime fingerprint'
+installed_root=$test_home/.config/omarchy/plugins/local.oma-plug-sea
+cp "$installed_root/.oma-plug-sea-managed" "$test_root/owner"
+printf '/a/different/checkout\n' > "$installed_root/.oma-plug-sea-managed"
+expect_reject verify-runtime 'different checkout ownership'
+cp "$test_root/owner" "$installed_root/.oma-plug-sea-managed"
+cp "$installed_runtime/bin/oma-plug-sea" "$test_root/original-launcher"
+printf '# stale installed helper\n' >> "$installed_runtime/bin/oma-plug-sea"
+expect_reject verify-runtime 'stale installed helper'
+cp "$test_root/original-launcher" "$installed_runtime/bin/oma-plug-sea"
+printf 'stale-cached-root\n' > "$test_home/live-fingerprint"
+expect_reject verify-runtime 'stale in-memory QML fingerprint'
+rm "$test_home/live-fingerprint"
+cp "$installed_runtime/PluginBrowser.qml" "$test_root/stamped-root"
+sed -i 's/readonly property string runtimeFingerprint: "[a-f0-9]*"/readonly property string runtimeFingerprint: "outdated"/' "$installed_runtime/PluginBrowser.qml"
+expect_reject verify-runtime 'invalid installation fingerprint stamp'
+cp "$test_root/stamped-root" "$installed_runtime/PluginBrowser.qml"
+run verify-runtime || fail 'restored runtime fingerprint'
+printf 'PASS: runtime fingerprint rejects wrong checkout, stale installed files and cached QML\n'
 run dev-uninstall || fail 'uninstall'
 cmp -s "$menu" "$test_root/original-menu" || fail 'menu did not round-trip byte-for-byte'
 cmp -s "$test_home/.config/omarchy/shell.json" "$test_root/original-shell" || fail 'unrelated shell config changed'

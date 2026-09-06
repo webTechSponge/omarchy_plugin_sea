@@ -51,6 +51,7 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 - Details show source, preview or fallback, local version/state, upstream checks and exact review/observed commits when supplied.
 - Click a detail preview (or focus it and press Enter/Space) to open the original-resolution viewer. Use Fit, 100%, zoom controls and scrolling/dragging to inspect it; Escape returns to the same detail page. Original images keep the existing download and decoder safety limits, with a separate cache from card previews.
 - The Available filter shows only listings supported by the in-app installer; manual-only entries remain in All plugins.
+- Catalog warnings such as quarantined or withdrawn remain visible even when a plugin is installed, including in action consent. Disable and remove remain available for recovery.
 - Install defaults to disabled. Install & enable is a separate explicit choice. Enable, disable, update and removal appear according to local state.
 - Operations show progress, capture stdout/stderr in Diagnostics, prevent conflicting actions, and confirm local state before reporting success.
 
@@ -62,6 +63,8 @@ Community plugins run **unsandboxed as your user**. Browsing and opening details
 
 Consent snapshots the exact ID/source and clearly labels catalog verification and reviewed commits. For installed plugins, View installed source opens the installed origin; a separate Catalog source link identifies a differing listing repository. Missing or differing origins never inherit catalog verification. Even matching origins do not verify the installed revision. A listing marked “verified” describes the marketplace's snapshot checks, not a security audit. The installed Git CLI clones or updates **mutable HEAD**, which may differ from the listed reviewed commit. Updates of enabled code can execute it immediately; consent explicitly acknowledges skipping the CLI's interactive diff prompt.
 
+Installation checks Git’s effective clone URL before calling Omarchy, so an existing Git URL rewrite cannot silently select another repository. After installation, the app checks the disabled checkout’s manifest and both its recorded and effective Git origins before reporting success or enabling it.
+
 Updates carry the approved installed origin to the helper, which rejects changed, rewritten or ambiguous origins before invoking the CLI. Omarchy does not expose an atomic expected-origin update option: unrelated external Git configuration changes can still race the final check and fetch.
 
 Install & enable first installs disabled, verifies the expected ID and then enables. A source changing its ID fails confirmation and can leave a disabled checkout to inspect. Installation is refused when undiscovered third-party IDs remain referenced in shell.json, since those dormant references could cause a supposedly disabled installation to load code. No configuration is silently removed to bypass that guard. Existing configuration is backed up before mutations. Bar widgets use their manifest's default placement through the supported enable command.
@@ -72,7 +75,7 @@ The official signed registry API/client was not deployed at verification time. W
 
 The last good normalized catalog lives at `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/catalog.json`. Refresh uses 5-second connection and 25-second total timeouts and atomically replaces only a validated document. Malformed optional status values disable only the affected listing. Failed requests, malformed required entries and duplicate IDs preserve the good cache and return it with a visible stale indicator and refresh timestamp. Without any cache, the UI shows an honest empty/error state, retains local plugins, and offers Refresh. No fixture catalog is passed off as live data.
 
-Preview failures display a fallback. Preview conversion is bounded and cached independently. Lifecycle commands have a 120-second timeout and a per-user action lock. A stopped shell, missing command, changed plugin state or unsuccessful postcondition produces a failure with diagnostics.
+Previews are accepted only from the marketplace’s supported WebP asset URLs. Every accepted image goes through the restricted downloader and separate decoder; the desktop shell receives a cached PNG, never a remote image URL. Other formats, origins and failed previews display a fallback. Conversion is bounded and cached independently. Lifecycle commands have a 120-second timeout and a per-user action lock. A stopped shell, missing command, changed plugin state or unsuccessful postcondition produces a failure with diagnostics.
 
 ## Development and verification
 
@@ -89,6 +92,8 @@ bash tests/model.sh
 scripts/test-integration
 git diff --check
 ```
+
+Desktop tests first compare the checkout, installed files and a fingerprint reported by the running app. A mismatch fails the test and asks you to reinstall; a stale shell instance must be reopened or restarted. Each installed build uses its own runtime path so QML imports cannot be reused from another build.
 
 The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, enables, disables and removes it through the real helper/CLI, and verifies each postcondition. It never installs arbitrary third-party code. Integration tests use isolated HOME and mocked CLI state; backend tests exercise malformed/partial data, invalid URLs/IDs, stale cache, network and subprocess failures, concurrency, consent, source mismatches and false-success rejection. Model tests execute the actual JavaScript through Qt6.
 
@@ -149,7 +154,7 @@ Some catalog entries omit compatibility results, capabilities or other details. 
 
 The app prevents its own management operations from overlapping, but it cannot stop a terminal command or another program from changing the same plugin.
 
-For example, a plugin's Git origin could change while its update consent dialog is open. The app checks the origin again and refuses the update if it detects a change. However, Omarchy's update command cannot make that check and the subsequent fetch one indivisible operation, so an external change in between can still slip through. Avoid managing the same plugin simultaneously through the app and a terminal.
+For example, a plugin's Git origin could change while its update consent dialog is open. The app checks the origin again and refuses the update if it detects a change. However, Omarchy's update command cannot make that check and the subsequent fetch one indivisible operation, so an external change in between can still slip through. Installation has similar source checks before cloning and before enabling, with the same limitation around simultaneous external changes. Avoid managing the same plugin simultaneously through the app and a terminal.
 
 Setting up Plugin Sea does not publish your project, push code to GitHub, submit a marketplace listing, or install community plugins. Those are separate actions you choose.
 

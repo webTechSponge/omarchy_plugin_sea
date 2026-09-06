@@ -19,7 +19,7 @@ function correlate(remote, local) {
     return result;
 }
 function status(p) {
-    if (p.local) return p.local.enabled ? "Enabled" : "Installed · disabled";
+    if (p.local) return (p.local.enabled ? "Enabled" : "Installed · disabled") + (lifecycleWarning(p) ? " · Catalog: " + p.status : "");
     if (p.status && ["active", "available", "listed", "ok"].indexOf(p.status) < 0) return p.status;
     return p.installAvailable ? "Available" : "Manual installation";
 }
@@ -88,4 +88,17 @@ function provenanceNote(p) {
     if (!sourceMatches(p))
         return "Installed Git origin differs from the catalog repository. Catalog verification does not apply to this installation.";
     return "Installed Git origin matches the catalog repository. Catalog checks cover a listed snapshot, not the installed revision.";
+}
+
+// Catalog lifecycle is independent of local installation and source matching.
+function lifecycleWarning(p) {
+    if (!p || p.localOnly || typeof p.status !== "string") return "";
+    var value = p.status.toLowerCase();
+    var kind = /quarantined|yanked|unavailable/.exec(value);
+    if (!kind) return "";
+    return "Catalog warning: this listing is " + value + ". "
+        + (kind[0] === "quarantined" ? "It has been isolated by the catalog. " : kind[0] === "yanked" ? "It has been withdrawn from the catalog. " : "It is not currently available from the catalog. ")
+        + "Check the source and catalog explanation before enabling or updating. "
+        + (p.local ? "You can still disable or remove the installed plugin. " : "")
+        + (p.local && !sourceMatches(p) ? "This warning refers to the listing with the same ID; its source is not confirmed to match this installation." : "");
 }

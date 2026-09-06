@@ -1,7 +1,7 @@
 def str: if type == "string" then . else "" end;
 def safeid: type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$") and (contains("..")|not);
 def repo: str | if test("^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?/?$") and (contains("..")|not) then rtrimstr("/") else "" end;
-def preview: str | if test("^assets/img/plugins/[A-Za-z0-9._-]+\\.(webp|png|jpg|jpeg)$") then "https://plugins.omarchy.org/" + . elif test("^https://[A-Za-z0-9.-]+/[A-Za-z0-9_./%~-]+$") then . else "" end;
+def preview: str | if (contains("..")|not) and test("^(?:https://plugins\\.omarchy\\.org/)?assets/img/plugins/[A-Za-z0-9._-]+\\.webp$") then if startswith("https://") then . else "https://plugins.omarchy.org/" + . end else "" end;
 if type != "object" or (.plugins|type) != "array" or (.plugins|length) == 0 then error("Catalog must contain a nonempty plugins array") else . end
 | .plugins as $plugins
 | if any($plugins[]; type != "object" or (.id|safeid|not) or (.name|type) != "string" or (.name|length)==0) then error("Catalog contains malformed entries") else . end

@@ -5,7 +5,7 @@ Read README.md and docs/architecture.md for product requirements; PROMPT.md, whe
 - Native Quickshell overlay, id `local.oma-plug-sea`, hosted by existing omarchy-shell.
 - UI: PluginBrowser.qml, components/, js/. Helpers: bin/, lib/. Bash + curl/jq and a native Qt6 preview decoder; `qt6-imageformats` required. `scripts/build-preview` builds the decoder with g++/pkg-config during mise setup/check; generated binaries stay untracked.
 - `mise trust && mise run setup`; `mise run check`; `mise run install`; `mise run open`; `mise run smoke`.
-- Development installation copies runtime files (manifest validator rejects symlinks). Re-run install after edits.
+- Development installation copies runtime files (manifest validator rejects symlinks). Re-run install after edits. Shipped runtime lives under runtime/<SHA256>/ with a stamped QML entrypoint; scripts/verify-runtime checks checkout, installed files and live build identity before desktop tests.
 - User changes require timestamped backups, preserved JSONC menu entries, and supported plugin IPC/CLI.
 - Catalog metadata is untrusted presentation data. Never execute upstream installCommand. Every mutation uses argument arrays, consent, locking, and checked local postconditions.
 - See docs/platform-research.md and docs/architecture.md for verified interfaces and limitations.

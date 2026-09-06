@@ -89,7 +89,14 @@ enable_plugin() {
   else run omarchy plugin enable "$id"; fi
 }
 case $action in
-install|install-enable) run omarchy plugin add "$source_url" --yes || finish false 'Installation failed. Review diagnostics and refresh local state; a partial disabled installation may remain.' ;;
+install|install-enable)
+  # --get-url resolves insteadOf locally without contacting any transport. Check
+  # the same inherited Git configuration that the CLI clone will receive.
+  effective_source=$(git ls-remote --get-url -- "$source_url" 2>>"$tmp/stderr") || finish false 'Installation refused: cannot resolve the approved Git source.'
+  valid_url "$effective_source" || finish false 'Installation refused: Git rewrites the approved source to an unsupported transport or repository.'
+  [[ ${effective_source%/} == "${source_url%/}" ]] || finish false 'Installation refused: Git rewrites the approved source to a different repository. Review Git insteadOf configuration.'
+  run omarchy plugin add "$source_url" --yes || finish false 'Installation failed. Review diagnostics and refresh local state; a partial disabled installation may remain.'
+  ;;
 enable) enable_plugin || finish false 'Enable failed; inspect diagnostic details.' ;;
 disable) run omarchy plugin disable "$id" || finish false 'Disable failed; inspect diagnostic details.' ;;
 update)
@@ -126,6 +133,17 @@ if [[ $action == update ]]; then
   fetched_commit=$(git -C "$path" rev-parse FETCH_HEAD 2>>"$tmp/stderr") || finish false 'Cannot verify the fetched Git revision.'
   [[ $head_commit == "$fetched_commit" ]] || finish false 'Installed revision does not match the fetched revision.'
   jq -e --arg id "$id" '.id==$id' "$path/manifest.json" >/dev/null || finish false 'Updated manifest ID differs from the expected ID.'
+fi
+if [[ $action == install || $action == install-enable ]]; then
+  # Clone origin can retain the approved spelling even when a rewrite selected
+  # another transport. Verify both raw and effective provenance while disabled.
+  path="$HOME/.config/omarchy/plugins/$id"
+  [[ -d $path/.git && ! -L $path && ! -L $path/.git ]] || finish false 'Installed disabled, but Git checkout provenance could not be confirmed; inspect the local installation.'
+  jq -e --arg id "$id" '.id==$id' "$path/manifest.json" >/dev/null || finish false 'Installed disabled, but the manifest ID differs from the approved plugin.'
+  raw_source=$(git -C "$path" config --get-all remote.origin.url 2>>"$tmp/stderr") || finish false 'Installed disabled, but the Git origin could not be read.'
+  effective_source=$(git -C "$path" remote get-url --all origin 2>>"$tmp/stderr") || finish false 'Installed disabled, but the effective Git origin could not be read.'
+  valid_url "$raw_source" && valid_url "$effective_source" || finish false 'Installed disabled, but Git provenance contains an unsupported or ambiguous source; enabling was refused.'
+  [[ ${raw_source%/} == "${source_url%/}" && ${effective_source%/} == "${source_url%/}" ]] || finish false 'Installed disabled, but Git provenance differs from the approved source; enabling was refused.'
 fi
 if [[ $action == install-enable ]]; then
   enable_plugin || finish false 'Installed disabled, but enabling failed.'
