@@ -1,0 +1,3 @@
+def safeid: type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$") and (contains("..")|not);
+if type != "object" or .schemaVersion != 1 or (.plugins|type) != "object" then error("Engagement stats must be an object with schemaVersion 1 and a plugins object") else . end
+| {schemaVersion:1, ok:true, source:$source, fetchedAt:$now, stale:false, error:"", hearts:([.plugins | to_entries[] | select(.key != "__proto__" and .key != "constructor" and .key != "prototype") | select(.key|safeid) | {key:.key, value:(.value.hearts | if type == "number" and isfinite and . >= 0 then floor else 0 end)}] | from_entries)}

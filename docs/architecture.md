@@ -6,7 +6,7 @@ QML starts asynchronous `Quickshell.Io.Process` instances using argument arrays 
 
 ## Helper boundary
 
-The catalog, local-state, action and preview helpers use Bash, jq and existing Omarchy system tools, returning JSON on stdout. The internal decoder builder instead prints an executable path on success and diagnostics on stderr with a nonzero exit on failure. Operational failures from the JSON helpers return an `ok:false` envelope, so consumers must inspect `ok`, not just process exit status. Invalid invocation or unexpected helper failure can also produce a nonzero exit.
+The catalog, engagement, local-state, action and preview helpers use Bash, jq and existing Omarchy system tools, returning JSON on stdout. The internal decoder builder instead prints an executable path on success and diagnostics on stderr with a nonzero exit on failure. Operational failures from the JSON helpers return an `ok:false` envelope, so consumers must inspect `ok`, not just process exit status. Invalid invocation or unexpected helper failure can also produce a nonzero exit.
 
 - `bin/oma-plug-sea-catalog refresh`: fetch live HTTPS metadata with bounded connection/total timeouts, normalize and atomically replace cache. A failed fetch or rejected document returns the saved catalog marked stale.
 - `bin/oma-plug-sea-catalog cached`: return saved data with a stale indication, or an empty failure envelope on first launch without cache.
@@ -15,8 +15,11 @@ The catalog, local-state, action and preview helpers use Bash, jq and existing O
 - `bin/oma-plug-sea-build-preview [--development]`: compile the bundled C++ decoder into private XDG cache, or prepare `lib/preview-decode` for development. Stdout is the executable path, not JSON. Build dependencies are checked before compilation.
 - `bin/oma-plug-sea-preview URL [original]`: validate the fixed-origin URL, return an existing cached PNG or prepare the decoder and download/convert under resource limits; `{ok,path,error}`.
 - `bin/oma-plug-sea-action ACTION ID [SOURCE] [CONSENT]`: `{ok,action,id,error,stdout,stderr,plugins}`. Install and install-enable require SOURCE and `--consent-unsandboxed`. Update requires the approved installed SOURCE and that flag; enable requires the flag; remove requires `--confirm-remove`; disable takes no extra argument.
+- `bin/oma-plug-sea-engagement refresh|cached`: fetch and normalize anonymous engagement stats from the marketplace engagement API, atomically caching the hearts map. A failed fetch or rejected document returns the saved hearts marked stale with `ok:false`. `heart ID` sends one consented anonymous heart event (exact `{"pluginId","type":"heart"}` body, `Origin: https://plugins.omarchy.org`); `hearts-state` reports this computer's sent-heart record.
 
 The normalized catalog is `{schemaVersion:1,ok,source,fetchedAt,generatedAt,stale,error,plugins:[]}`. A row contains `id,name,description,author,version,category,tags,repo,previewImage,previewThumbnail,installAvailable,installNote,verificationStatus,verificationCoverage,verificationSnapshotStatus,listingValidatedCommit,upstreamObservedCommit,upstreamCheckStatus,stars,listedAt,status,sourceType,repositoryLayout,license`. Unsupported/malformed optional fields become conservative defaults. Broken required fields or duplicate IDs reject the document, preserving the good cache.
+
+The normalized engagement document is `{schemaVersion:1,ok,source,fetchedAt,stale,error,hearts:{}}` with `hearts` mapping canonical plugin IDs to nonnegative integers. It is cached at `oma_plug_sea/engagement.json` under `engagement.lock` with the same atomic-replace and stale-fallback discipline as the catalog. Only hearts are carried; views and copies are intentionally omitted until a later task needs them (D3, YAGNI). Counts are floored to finite nonnegative integers, malformed entries become 0, and non-canonical or prototype-like IDs (for example `__proto__`) are dropped so no hostile key reaches UI rows. A literal "—" means the API reported no record for that ID.
 
 ## Trust and mutations
 
@@ -41,6 +44,12 @@ The backend's lock coordinates its own actions, not unrelated terminal commands.
 The UI checks on reopen and every five minutes while visible. Its initial empty load refreshes first. A detected change highlights **Refresh available**; only explicit refresh applies new rows. Polling, refreshes and mutations are serialized, with generation checks preventing obsolete poll results from overriding a refresh. Previously detected changes remain indicated if a later poll fails.
 
 The published source currently advertises a ten-minute HTTP cache lifetime; polling reports the version served by that source/CDN.
+
+## Engagement stats
+
+Hearts come from the marketplace's separate engagement API (`https://api.omarchyplugins.com/v1/stats`), never from `catalog.json`. `bin/oma-plug-sea-engagement` applies the same lock/atomic/stale-fallback discipline as the catalog helper and writes `oma_plug_sea/engagement.json`. The UI refreshes engagement alongside catalog refreshes but independently of catalog health: an engagement failure never blocks the catalog and never marks it stale. On failure the helper returns the last saved hearts with `ok:false` and `stale:true`; the UI keeps showing those cached hearts (falling back to the previous in-memory map when no cache exists) and reports the condition on the status line. Cards and details render the count, and sorting by hearts treats plugins without an engagement record as lowest so untracked plugins sort last in descending order.
+
+Hearts are anonymous aggregate interactions reported by the omarchyplugins.com marketplace — not downloads, installs, unique people, or safety signals. The UI displays hearts only (D3). Sending a heart (Phase B) POSTs exactly one `{"pluginId","type":"heart"}` event to `https://api.omarchyplugins.com/v1/events` after explicit consent, and never sends view/copy events (D2). The request carries `Origin: https://plugins.omarchy.org` (D1, disclosed in the consent text); the marketplace rate-limits hearts and records no account or identity. The helper validates the ID locally, refuses repeats via a per-computer hearted record at `oma_plug_sea/hearts.json` (queried with `hearts-state`), and maps 202-recorded / rate-limit / 429 / transport outcomes to honest envelopes. The UI applies the change optimistically, lets the server total win on success, and rolls back on failure; a heart never touches install, enable, or verification state.
 
 ## Full-size preview viewer
 

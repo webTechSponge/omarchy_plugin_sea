@@ -4,14 +4,14 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 export HOME="$tmp/home" XDG_CACHE_HOME="$tmp/cache" XDG_STATE_HOME="$tmp/state"
-export TEST_ROOT="$tmp" TEST_FIXTURE="$ROOT/fixtures/catalog.json"
+export TEST_ROOT="$tmp" TEST_FIXTURE="$ROOT/fixtures/catalog.json" TEST_ENGAGEMENT_FIXTURE="$ROOT/fixtures/engagement.json"
 export TEST_REAL_GIT=$(command -v git)
 mkdir -p "$tmp/mock" "$HOME/.config/omarchy/plugins"
 export PATH="$tmp/mock:$PATH"
 cat >"$tmp/mock/curl" <<'MOCK'
 #!/usr/bin/env bash
 [[ ${TEST_NETWORK_FAIL:-0} == 0 ]] || { echo 'simulated network failure' >&2; exit 7; }
-headers=""; output=""; head=false; status=false
+headers=""; output=""; head=false; status=false; url=""; status_code="${TEST_HEAD_STATUS:-200}"
 while (( $# )); do
   case $1 in
     -D) headers=$2; shift ;;
@@ -19,6 +19,7 @@ while (( $# )); do
     --head) head=true ;;
     -w) status=true; shift ;;
     -H) printf '%s\n' "$2" >>"$TEST_ROOT/conditions"; shift ;;
+    *) url=$1 ;;
   esac
   shift
 done
@@ -29,8 +30,19 @@ if [[ -n $headers ]]; then
   fi
   printf '\r\n' >>"$headers"
 fi
-[[ $head == true || -z $output ]] || cp "${TEST_CATALOG:-$TEST_FIXTURE}" "$output"
-[[ $status == false ]] || printf '%s' "${TEST_HEAD_STATUS:-200}"
+if [[ $head == true || -z $output ]]; then :;
+elif [[ $url == https://api.omarchyplugins.com/v1/events ]]; then
+  [[ ${TEST_HEART_FAIL:-0} == 0 ]] || { echo 'simulated heart failure' >&2; exit 7; }
+  if [[ -n ${TEST_HEART_FIXTURE:-} ]]; then cp "$TEST_HEART_FIXTURE" "$output"
+  else printf '%s' '{"recorded":true,"plugin":{"hearts":8}}' >"$output"; fi
+  status_code=${TEST_HEART_STATUS:-${TEST_HEAD_STATUS:-200}}
+elif [[ $url == https://api.omarchyplugins.com/v1/stats ]]; then
+  [[ ${TEST_ENGAGEMENT_FAIL:-0} == 0 ]] || { echo 'simulated engagement failure' >&2; exit 7; }
+  cp "${TEST_ENGAGEMENT_FIXTURE:-$TEST_ROOT/engagement.json}" "$output"
+else
+  cp "${TEST_CATALOG:-$TEST_FIXTURE}" "$output"
+fi
+[[ $status == false ]] || printf '%s' "$status_code"
 exit 0
 MOCK
 cat >"$tmp/mock/omarchy-shell" <<'MOCK'
@@ -305,4 +317,76 @@ TEST_NETWORK_FAIL=1 "$cat_helper" check >"$tmp/out"
 assert "$tmp/out" '.ok and .refreshNeeded' 'no saved catalog requires refresh without making a network request'
 TEST_NETWORK_FAIL=1 "$cat_helper" refresh >"$tmp/out"
 assert "$tmp/out" '.ok==false and .stale and (.plugins|length)==0' 'offline without cache transparent'
+
+# Engagement stats helper: independent of the catalog, same stale-fallback discipline.
+eng="$ROOT/bin/oma-plug-sea-engagement"
+TEST_ENGAGEMENT_FAIL=1 "$eng" cached >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.hearts|length)==0 and .error!=""' 'cached with no cache returns an empty hearts stub'
+"$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.ok and (.stale|not) and .hearts["test.one"]==7 and .hearts["test.two"]==0' 'engagement refresh normalizes fixture'
+cp "$XDG_CACHE_HOME/oma_plug_sea/engagement.json" "$tmp/eng-good"
+TEST_ENGAGEMENT_FAIL=1 "$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and .hearts["test.one"]==7 and (.error|contains("simulated engagement"))' 'engagement network failure keeps stale hearts'
+cmp "$tmp/eng-good" "$XDG_CACHE_HOME/oma_plug_sea/engagement.json"
+printf '{"schemaVersion":2,"plugins":{}}' >"$tmp/eng-bad"
+TEST_ENGAGEMENT_FIXTURE="$tmp/eng-bad" "$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and .hearts["test.one"]==7 and (.error|contains("rejected"))' 'malformed engagement data rejected, cache retained'
+cmp "$tmp/eng-good" "$XDG_CACHE_HOME/oma_plug_sea/engagement.json"
+"$eng" cached >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and .hearts["test.one"]==7' 'cached prints saved hearts as stale'
+: >"$TEST_ROOT/conditions"
+"$eng" heart 'bad id!' >"$tmp/out"
+assert "$tmp/out" '.ok==false and .already==false and (.error|contains("Invalid"))' 'heart rejects invalid id locally'
+TEST_NETWORK_FAIL=1 "$eng" heart 'also bad!' >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("Invalid"))' 'heart validation precedes network'
+TEST_HEART_FAIL=1 "$eng" heart fresh.id >"$tmp/out"
+assert "$tmp/out" '.ok==false and .already==false and (.error|contains("Could not send heart"))' 'heart transport failure honest'
+"$eng" heart test.one >"$tmp/out"
+assert "$tmp/out" '.ok==true and .recorded==true and .hearts==8' 'heart success records server total'
+assert "$XDG_STATE_HOME/oma_plug_sea/hearts.json" '.["test.one"]==true' 'hearted flag persisted'
+assert "$XDG_CACHE_HOME/oma_plug_sea/engagement.json" '.hearts["test.one"]==8' 'cache bumped to server total'
+grep -q -F 'Origin: https://plugins.omarchy.org' "$TEST_ROOT/conditions" || { echo 'FAIL: heart Origin header' >&2; exit 1; }
+pass=$((pass+1))
+grep -q -F 'Content-Type: application/json' "$TEST_ROOT/conditions" || { echo 'FAIL: heart content type' >&2; exit 1; }
+pass=$((pass+1))
+TEST_NETWORK_FAIL=1 "$eng" heart test.one >"$tmp/out"
+assert "$tmp/out" '.ok==false and .already==true' 'no double-send while offline'
+printf '%s' '{"recorded":false}' >"$tmp/heart-rate"
+: >"$tmp/heart-empty"
+printf '%s' '{"recorded":true}' >"$tmp/heart-nototal"
+TEST_HEART_STATUS=202 TEST_HEART_FIXTURE="$tmp/heart-rate" "$eng" heart test.two >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("rate"))' 'recorded:false maps to rate message'
+TEST_HEART_STATUS=429 TEST_HEART_FIXTURE="$tmp/heart-empty" "$eng" heart test.two >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("429"))' 'HTTP 429 reported honestly'
+TEST_HEART_STATUS=200 TEST_HEART_FIXTURE="$tmp/heart-nototal" "$eng" heart test.two >"$tmp/out"
+assert "$tmp/out" '.ok==true and .hearts==null' 'recorded:true without total still succeeds'
+"$eng" hearts-state >"$tmp/out"
+assert "$tmp/out" '.ok==true and .hearted["test.one"]==true and .hearted["test.two"]==true and (.hearted|has("fresh.id")|not)' 'hearts-state lists hearted ids'
+mkdir -p "$tmp/eng-evil"
+printf '%s' '{"schemaVersion":1,"ok":true,"source":"planted","fetchedAt":"t","stale":false,"error":"","hearts":{"test.evil":999}}' >"$tmp/eng-evil/engagement.json"
+cp "$tmp/eng-evil/engagement.json" "$tmp/eng-planted"
+mv "$XDG_CACHE_HOME/oma_plug_sea" "$tmp/eng-real"
+ln -s "$tmp/eng-evil" "$XDG_CACHE_HOME/oma_plug_sea"
+"$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.hearts|length)==0 and (.error|contains("Cache directory unavailable"))' 'symlinked engagement cache refused, planted hearts not surfaced'
+cmp "$tmp/eng-planted" "$tmp/eng-evil/engagement.json"
+"$eng" cached >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.hearts|length)==0 and (.error|contains("Cache directory unavailable"))' 'cached with unsafe dir returns empty stub'
+rm "$XDG_CACHE_HOME/oma_plug_sea"; mv "$tmp/eng-real" "$XDG_CACHE_HOME/oma_plug_sea"
+mv "$XDG_STATE_HOME/oma_plug_sea" "$tmp/hearts-real"
+ln -s "$tmp/hearts-evil" "$XDG_STATE_HOME/oma_plug_sea"
+"$eng" hearts-state >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("Hearts state unavailable"))' 'symlinked hearts state refused'
+: >"$TEST_ROOT/conditions"
+"$eng" heart evil.id >"$tmp/out"
+assert "$tmp/out" '.ok==false and .already==false and (.error|contains("Hearts state unavailable"))' 'heart with unsafe state not sent'
+[[ ! -s "$TEST_ROOT/conditions" && ! -e "$tmp/hearts-evil" ]] || { echo 'FAIL: unsafe-state heart touched network or disk' >&2; exit 1; }
+pass=$((pass+1))
+rm "$XDG_STATE_HOME/oma_plug_sea"; mv "$tmp/hearts-real" "$XDG_STATE_HOME/oma_plug_sea"
+exec 7>"$XDG_CACHE_HOME/oma_plug_sea/engagement.lock"
+flock -n 7
+"$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.stale and (.error|contains("Another"))' 'concurrent engagement refresh retains data'
+flock -u 7
+
 echo "PASS: $pass backend behavior/security assertions"
