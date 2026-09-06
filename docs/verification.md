@@ -144,3 +144,14 @@ Standard source installations now build the bundled Qt preview decoder automatic
 Changed the application ID from `local.oma-plug-sea` to `webtechsponge.plugin-sea`, set author to `webTechSponge`, and declared the existing MIT license in the manifest. Updated IPC routes, installation paths, self-mutation protection, runtime verification and current documentation; the launcher, caches and inert smoke fixture retain their identifiers.
 
 `mise run check` passed, including 61 backend assertions, Qt model and preview suites, real isolated Git installation, automatic decoder build/recovery, and managed integration ownership/fingerprint/cleanup checks. QML lint passed with 137 existing advisory warnings. The real local migration used the old checkout's `mise run uninstall` before changing the scripts, followed by `mise run install` and `mise run smoke`. The current runtime fingerprint was verified; summon/hide and inert fixture enable/disable/remove passed. Registry inspection confirmed only the new application ID is discovered and enabled. The new ID's self-removal request was correctly rejected. Recent shell logs contained no QML errors. Recovery copies remain in the existing XDG state directory.
+
+## Security hardening (findings 2–5) — 2026-09-06
+
+Implemented `docs/security-hardening-plan.md` via three parallel edit units plus one single-writer test integration. Finding 1 (origin-check TOCTOU vs. external Git config) remains an accepted documented platform limitation.
+
+- Installed-source buttons are GitHub-canonical or disabled: new `safeGitHubLink` in `js/CatalogModel.js`, raw-URL fallback removed from `PluginDetails.qml`, both source buttons gated. `safeLink` unchanged for the marketplace preview gate. Model tests cover foreign-origin rejection and SSH canonicalization.
+- `bin/oma-plug-sea-local` skips symlinked `manifest.json`/`.git` entries; they contribute no metadata row.
+- `bin/oma-plug-sea-catalog` and `bin/oma-plug-sea-preview` refuse non-absolute, symlinked or unowned cache dirs (catalog falls back to last-good stale; preview returns `ok:false`). Refresh-time `etag`/`lastModified` are CRLF-stripped and bounded before persist.
+- `tests/backend.sh` gains symlinked-manifest, symlinked-`.git`, symlinked-cache and CRLF-ETag cases; `tests/preview.sh` gains a symlinked-cache refusal case.
+
+`mise run check` passes, including 69 backend assertions (was 61), Qt model and preview suites, and managed integration checks. QML analysis passes with 140 existing advisory warnings.

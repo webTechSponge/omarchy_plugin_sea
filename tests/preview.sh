@@ -115,6 +115,12 @@ fi
 "$tmp/fixture" make "$tmp/input.webp" 8193 2
 "$helper" https://plugins.omarchy.org/assets/img/plugins/oversized-original.webp original >"$tmp/out"
 jq -e '.ok==false and (.error|contains("conversion failed"))' "$tmp/out" >/dev/null
+# A symlinked cache directory is refused before any download or outside write.
+mkdir -p "$tmp/elsewhere" "$tmp/evil-cache"
+ln -s "$tmp/elsewhere" "$tmp/evil-cache/oma_plug_sea"
+XDG_CACHE_HOME="$tmp/evil-cache" "$helper" "$url" >"$tmp/out"
+jq -e '.ok==false and .path=="" and (.error|contains("unavailable"))' "$tmp/out" >/dev/null
+[[ $(find "$tmp/elsewhere" -mindepth 1 | wc -l) == 0 ]]
 # Initial, failed, malformed, byte limit, truncated, disguised, dimensions, metadata,
 # animated, alpha, thin, concurrent, original, original dimension rejection.
 [[ $(wc -l <"$tmp/fetches") == 14 ]]

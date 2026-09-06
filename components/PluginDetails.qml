@@ -12,7 +12,7 @@ ColumnLayout {
     signal actionRequested(string action)
     signal previewRequested(string source)
     function focusPreview() { previewTarget.forceActiveFocus(); }
-    readonly property string installedSourceLink: Catalog.canonicalGitHub(Catalog.sourceUrl(plugin)) || Catalog.sourceUrl(plugin)
+    readonly property string installedSourceLink: Catalog.canonicalGitHub(Catalog.sourceUrl(plugin)) || ""
     spacing: 14
     Controls.ScrollView {
         Layout.fillWidth: true; Layout.fillHeight: true
@@ -58,8 +58,8 @@ ColumnLayout {
     }
     Flow {
         Layout.fillWidth: true; Layout.preferredHeight: childrenRect.height; spacing: 10
-        Ui.Button { text: detail.plugin.local ? "View installed source ↗" : "View source ↗"; bordered: true; focusable: true; enabled: Catalog.safeLink(detail.installedSourceLink); opacity: enabled ? 1 : 0.4; onClicked: Qt.openUrlExternally(detail.installedSourceLink) }
-        Ui.Button { visible: !!detail.plugin.local && !detail.plugin.localOnly && !Catalog.sourceMatches(detail.plugin); text: "Catalog source ↗"; bordered: true; focusable: true; enabled: Catalog.safeLink(detail.plugin.repo); onClicked: Qt.openUrlExternally(detail.plugin.repo) }
+        Ui.Button { text: detail.plugin.local ? "View installed source ↗" : "View source ↗"; bordered: true; focusable: true; enabled: Catalog.safeGitHubLink(detail.installedSourceLink); opacity: enabled ? 1 : 0.4; onClicked: Qt.openUrlExternally(detail.installedSourceLink) }
+        Ui.Button { visible: !!detail.plugin.local && !detail.plugin.localOnly && !Catalog.sourceMatches(detail.plugin); text: "Catalog source ↗"; bordered: true; focusable: true; enabled: Catalog.safeGitHubLink(detail.plugin.repo); onClicked: Qt.openUrlExternally(detail.plugin.repo) }
         Ui.Button { visible: !detail.plugin.local && !!detail.plugin.installAvailable; text: "Install disabled"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("install") }
         Ui.Button { visible: !detail.plugin.local && !!detail.plugin.installAvailable; text: "Install & enable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("install-enable") }
         Ui.Button { visible: !!detail.plugin.local && !detail.plugin.local.enabled; text: "Enable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("enable") }

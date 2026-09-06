@@ -9,7 +9,11 @@ root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 decoder="$root/lib/preview-decode"
 umask 077
 cache=${XDG_CACHE_HOME:-$HOME/.cache}/oma_plug_sea/previews
-mkdir -p "$cache"
+[[ $cache == /* ]] || reply false '' 'Preview cache unavailable.'
+[[ ! -L ${cache%/previews} && ! -L $cache ]] || reply false '' 'Preview cache unavailable.'
+mkdir -p -- "$cache"
+[[ -d $cache && -O $cache ]] || reply false '' 'Preview cache unavailable.'
+chmod 700 -- "$cache"
 key=$(printf '%s' "$url" | sha256sum)
 key=${key%% *}
 decoder_options=()

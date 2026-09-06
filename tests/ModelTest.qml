@@ -52,6 +52,10 @@ Item {
             ["http://github.com/owner/repo", "https://github.com.evil/owner/repo", "https://user@github.com/owner/repo", "https://github.com/owner/repo?ref=main", "https://github.com/owner/repo#readme", "https://github.com/owner/repo/tree/main", "https://github.com/owner/..", "https://github.com/owner/.git", "https://github.com/owner/repo%2fother", "ssh://root@github.com/owner/repo", "file:///tmp/repo", "", null].forEach(function(url) {
                 check(Catalog.canonicalGitHub(url) === "", "Reject ambiguous/unsupported origin: " + url);
             });
+            check(Catalog.safeGitHubLink("https://evil.example/phish") === false, "Non-GitHub origin is not a safe GitHub link");
+            check(Catalog.safeGitHubLink("git@github.com:o/r") === true, "SSH shorthand is a safe GitHub link");
+            var foreign = Catalog.correlate([listed], [{id:"test.source",repo:"https://evil.example/phish",enabled:true}])[0];
+            check(Catalog.canonicalGitHub(Catalog.sourceUrl(foreign)) === "", "Foreign installed origin has no canonical GitHub link");
             check(Catalog.sourceUrl(listed) === listed.repo, "Uninstalled source uses catalog repository");
             check(Catalog.sourceUrl(matched) === matched.local.repo, "Installed source retains actual raw Git origin");
             check(Catalog.sourceUrl(forked) === forked.local.repo, "Installed fork source never inherits catalog original");
