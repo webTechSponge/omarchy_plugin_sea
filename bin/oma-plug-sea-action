@@ -16,7 +16,8 @@ valid_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ &
 [[ $id != local.oma-plug-sea ]] || finish false 'Manage Omarchy Plugin Sea using its documented development uninstall command.'
 case $action in
   install|install-enable) [[ $# == 2 ]] || finish false 'Installation requires an exact source and explicit consent.'; source_url=$1; consent=$2; valid_url "$source_url" || finish false 'Only canonical HTTPS GitHub repositories are supported.' ;;
-  enable|update|remove) [[ $# == 1 ]] || finish false 'This action requires explicit confirmation.'; consent=$1 ;;
+  update) [[ $# == 2 ]] || finish false 'Update requires an exact approved source and explicit consent.'; source_url=$1; consent=$2; valid_url "$source_url" || finish false 'Only canonical HTTPS GitHub repositories are supported.' ;;
+  enable|remove) [[ $# == 1 ]] || finish false 'This action requires explicit confirmation.'; consent=$1 ;;
   disable) [[ $# == 0 ]] || finish false 'Unexpected action arguments.' ;;
   *) finish false 'Unsupported plugin action.' ;;
 esac
@@ -67,8 +68,9 @@ install|install-enable)
   [[ $action != disable ]] || { jq -e '.canDisable!=false' <<<"$installed" >/dev/null || finish false 'The shell does not allow disabling this plugin.'; }
   if [[ $action == update ]]; then
     jq -e '.gitManaged==true' <<<"$installed" >/dev/null || finish false 'Only Git-managed installations can be updated.'
-    source_url=$(jq -r '.repo' <<<"$installed")
-    valid_url "$source_url" || finish false 'Update refused: the local Git origin is not a supported HTTPS repository.'
+    inspected_source=$(jq -r '.repo' <<<"$installed")
+    valid_url "$inspected_source" || finish false 'Update refused: the local Git origin is not a supported HTTPS repository.'
+    [[ ${inspected_source%/} == "${source_url%/}" ]] || finish false 'Update refused: the Git origin changed since consent. Refresh local state and review the source again.'
   fi
   ;;
 esac
@@ -90,7 +92,16 @@ case $action in
 install|install-enable) run omarchy plugin add "$source_url" --yes || finish false 'Installation failed. Review diagnostics and refresh local state; a partial disabled installation may remain.' ;;
 enable) enable_plugin || finish false 'Enable failed; inspect diagnostic details.' ;;
 disable) run omarchy plugin disable "$id" || finish false 'Disable failed; inspect diagnostic details.' ;;
-update) run omarchy plugin update "$id" --yes || finish false 'Update failed. The CLI reports whether validation rollback was possible.' ;;
+update)
+  # Resolve the fetch URL immediately before handing off to the CLI. --all also
+  # rejects ambiguous multiple URLs; get-url applies Git insteadOf rewrites.
+  # Omarchy has no atomic expected-origin option, so external Git config changes
+  # can still race this check and its subsequent `git fetch origin HEAD`.
+  current_source=$(git -C "$HOME/.config/omarchy/plugins/$id" remote get-url --all origin 2>>"$tmp/stderr") || finish false 'Update refused: cannot read the current Git origin.'
+  valid_url "$current_source" || finish false 'Update refused: the effective Git origin is not one supported HTTPS repository.'
+  [[ ${current_source%/} == "${source_url%/}" ]] || finish false 'Update refused: the Git origin changed since consent. Refresh local state and review the source again.'
+  run omarchy plugin update "$id" --yes || finish false 'Update failed. The CLI reports whether validation rollback was possible.'
+  ;;
 remove) run omarchy plugin remove "$id" --yes || finish false 'Removal failed; inspect diagnostic details.' ;;
 esac
 run omarchy-shell shell rescanPlugins || finish false 'The command completed but the shell could not rescan. State has not been confirmed.'

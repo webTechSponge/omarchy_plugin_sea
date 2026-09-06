@@ -4,7 +4,7 @@
 
 A native, theme-aware community plugin browser inside the existing Omarchy Quickshell desktop. Browse cards and previews, search names/authors/tags, filter by category or installation state, sort by name/stars/listing date, inspect provenance, and manage local plugins with explicit consent.
 
-![Omarchy Plugin Sea with live catalog previews](docs/screenshots/browser.png)
+![Omarchy Plugin Sea with live catalog previews](docs/screenshots/branded-browser.png)
 
 ## Open
 
@@ -19,12 +19,12 @@ The repository directory is `omarchy_plugin_sea` and the visible application nam
 
 ## Requirements and setup
 
-Omarchy with the current plugin CLI, a running Quickshell shell, Bash, curl, jq, Git, util-linux (`flock`, `prlimit`), coreutils (`timeout`), Perl, and Qt6 with `qt6-imageformats` for WebP previews. A small native Qt helper decodes previews in a separate process and caches PNGs. ImageMagick is not required. No Python, Node, database, or web framework is required. Building from source needs `g++`, `pkg-config` and Qt6 development files (`gcc`, `pkgconf`, `qt6-base` on Arch). Developer checks also use `qmllint`, the Qt6 QML runner and `libwebp` fixture APIs.
+Omarchy with the current plugin CLI, a running Quickshell shell, Bash, curl, jq, Git, util-linux (`flock`, `prlimit`), coreutils (`timeout`), Perl, and Qt6 with `qt6-imageformats` for WebP previews. A small native Qt helper decodes previews in a separate process and caches PNGs. No Python, Node, database, or web framework is required. Building from source needs `g++`, `pkg-config` and Qt6 development files (`gcc`, `pkgconf`, `qt6-base` on Arch). Setup and checks also require `qt6-declarative` (`qmllint` and the Qt6 QML runner), `libwebp` fixture APIs and `ripgrep`. The optional desktop keyboard smoke check requires `wtype`.
 
 Install missing native dependencies from a terminal:
 
 ```bash
-omarchy pkg add qt6-imageformats gcc pkgconf qt6-base
+omarchy pkg add qt6-imageformats gcc pkgconf qt6-base qt6-declarative libwebp ripgrep
 ```
 
 Use mise for the project environment and commands:
@@ -50,6 +50,7 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 - Tab moves between controls. Ctrl+F returns to search; F5 refreshes. Escape cancels consent, returns from details, clears search, then closes.
 - Details show source, preview or fallback, local version/state, upstream checks and exact review/observed commits when supplied.
 - Click a detail preview (or focus it and press Enter/Space) to open the original-resolution viewer. Use Fit, 100%, zoom controls and scrolling/dragging to inspect it; Escape returns to the same detail page. Original images keep the existing download and decoder safety limits, with a separate cache from card previews.
+- The Available filter shows only listings supported by the in-app installer; manual-only entries remain in All plugins.
 - Install defaults to disabled. Install & enable is a separate explicit choice. Enable, disable, update and removal appear according to local state.
 - Operations show progress, capture stdout/stderr in Diagnostics, prevent conflicting actions, and confirm local state before reporting success.
 
@@ -59,7 +60,9 @@ Verified on **2026-09-05**: `https://omarchyplugins.com/` redirects to `https://
 
 Community plugins run **unsandboxed as your user**. Browsing and opening details never import their QML or execute their scripts. The browser never executes a catalog `installCommand`. It accepts canonical HTTPS GitHub repository sources for installation and delegates Git operations and manifest validation to `omarchy plugin add/enable/disable/update/remove`.
 
-Consent shows the exact ID/source, catalog verification status, reviewed commit and warning. A listing marked “verified” describes the marketplace's snapshot checks, not a security audit. The installed Git CLI clones or updates **mutable HEAD**, which may differ from the listed reviewed commit. Updates of enabled code can execute it immediately; consent explicitly acknowledges skipping the CLI's interactive diff prompt.
+Consent snapshots the exact ID/source and clearly labels catalog verification and reviewed commits. For installed plugins, View installed source opens the installed origin; a separate Catalog source link identifies a differing listing repository. Missing or differing origins never inherit catalog verification. Even matching origins do not verify the installed revision. A listing marked “verified” describes the marketplace's snapshot checks, not a security audit. The installed Git CLI clones or updates **mutable HEAD**, which may differ from the listed reviewed commit. Updates of enabled code can execute it immediately; consent explicitly acknowledges skipping the CLI's interactive diff prompt.
+
+Updates carry the approved installed origin to the helper, which rejects changed, rewritten or ambiguous origins before invoking the CLI. Omarchy does not expose an atomic expected-origin update option: unrelated external Git configuration changes can still race the final check and fetch.
 
 Install & enable first installs disabled, verifies the expected ID and then enables. A source changing its ID fails confirmation and can leave a disabled checkout to inspect. Installation is refused when undiscovered third-party IDs remain referenced in shell.json, since those dormant references could cause a supposedly disabled installation to load code. No configuration is silently removed to bypass that guard. Existing configuration is backed up before mutations. Bar widgets use their manifest's default placement through the supported enable command.
 
@@ -67,7 +70,7 @@ The official signed registry API/client was not deployed at verification time. W
 
 ## Offline behavior
 
-The last good normalized catalog lives at `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/catalog.json`. Refresh uses 5-second connection and 25-second total timeouts and atomically replaces only a validated document. Failed requests, malformed entries and duplicate IDs preserve the good cache and return it with a visible stale indicator and refresh timestamp. Without any cache, the UI shows an honest empty/error state, retains local plugins, and offers Refresh. No fixture catalog is passed off as live data.
+The last good normalized catalog lives at `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/catalog.json`. Refresh uses 5-second connection and 25-second total timeouts and atomically replaces only a validated document. Malformed optional status values disable only the affected listing. Failed requests, malformed required entries and duplicate IDs preserve the good cache and return it with a visible stale indicator and refresh timestamp. Without any cache, the UI shows an honest empty/error state, retains local plugins, and offers Refresh. No fixture catalog is passed off as live data.
 
 Preview failures display a fallback. Preview conversion is bounded and cached independently. Lifecycle commands have a 120-second timeout and a per-user action lock. A stopped shell, missing command, changed plugin state or unsuccessful postcondition produces a failure with diagnostics.
 

@@ -40,7 +40,10 @@ echo ok
 MOCK
 cat >"$tmp/mock/git" <<'MOCK'
 #!/usr/bin/env bash
-if [[ $3 == config ]]; then echo https://github.com/test/weather; exit; fi
+if [[ $3 == config ]]; then echo "${TEST_GIT_ORIGIN:-https://github.com/test/weather}"; exit; fi
+if [[ $3 == remote && $4 == get-url ]]; then
+ printf '%s\n' "${TEST_EFFECTIVE_ORIGIN:-${TEST_GIT_ORIGIN:-https://github.com/test/weather}}"; exit
+fi
 if [[ $3 == rev-parse ]]; then
  if [[ $4 == FETCH_HEAD && ${TEST_REV_MISMATCH:-0} == 1 ]]; then echo different; else echo verified-revision; fi
  exit
@@ -149,6 +152,20 @@ pass=$((pass+1))
 printf '{"plugins":[{"id":"test.partial"}]}' >"$tmp/broken"
 if "$cat_helper" normalize "$tmp/broken" >/dev/null 2>&1; then echo 'FAIL partial catalog' >&2; exit 1; fi
 pass=$((pass+1))
+# Malformed optional status disables just that listing instead of crashing jq.
+for bad_status in 7 true false '{}' '[]'; do
+  jq --argjson status "$bad_status" '.plugins[0].status=$status | .plugins[0].installAvailable=true' "$TEST_FIXTURE" >"$tmp/status.json"
+  "$cat_helper" normalize "$tmp/status.json" >"$tmp/out"
+  assert "$tmp/out" '.ok and (.plugins|length)==3 and (.plugins[0] | .installAvailable==false and .status=="" and (.installNote|contains("invalid type")))' "invalid status $bad_status safely disables listing"
+done
+for status in null '"active"'; do
+  jq --argjson status "$status" '.plugins[0].status=$status | .plugins[0].installAvailable=true' "$TEST_FIXTURE" >"$tmp/status.json"
+  "$cat_helper" normalize "$tmp/status.json" >"$tmp/out"
+  assert "$tmp/out" '.ok and .plugins[0].installAvailable' "supported status $status preserves listing availability"
+done
+jq 'del(.plugins[0].status) | .plugins[0].installAvailable=true' "$TEST_FIXTURE" >"$tmp/status.json"
+"$cat_helper" normalize "$tmp/status.json" >"$tmp/out"
+assert "$tmp/out" '.ok and .plugins[0].installAvailable' 'missing optional status preserves listing availability'
 jq '.plugins=[{id:"test.weather",name:"Weather",repo:"https://github.com/test/weather",installAvailable:true}]' "$TEST_FIXTURE" >"$tmp/install.json"
 TEST_CATALOG="$tmp/install.json" "$cat_helper" refresh >/dev/null
 "$act" install test.weather https://github.com/test/weather >"$tmp/out"
@@ -171,9 +188,22 @@ assert "$tmp/out" '.ok==false and (.stderr|contains("validation failure"))' 'sub
 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok and any(.plugins[];.id=="test.weather" and .enabled==false)' 'install defaults disabled'
 mkdir -p "$HOME/.config/omarchy/plugins/test.weather/.git"
+cp "$tmp/argv" "$tmp/before-update"
 "$act" update test.weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("approved source"))' 'update requires approved source'
+TEST_GIT_ORIGIN=https://github.com/test/changed "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("changed since consent"))' 'origin changed while consent was open rejects update'
+TEST_EFFECTIVE_ORIGIN=https://github.com/test/changed "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("changed since consent"))' 'fresh effective origin differs from earlier local snapshot'
+TEST_EFFECTIVE_ORIGIN=$'https://github.com/test/weather\nhttps://github.com/test/other' "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("effective Git origin"))' 'ambiguous origin URLs rejected'
+"$act" update test.weather 'https://github.com/test/weather;echo unsafe' --consent-unsandboxed >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("HTTPS"))' 'update approved source remains strictly validated'
+cmp "$tmp/before-update" "$tmp/argv"
+pass=$((pass+1))
+"$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok' 'update verifies fetched revision'
-TEST_REV_MISMATCH=1 "$act" update test.weather --consent-unsandboxed >"$tmp/out"
+TEST_REV_MISMATCH=1 "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
 assert "$tmp/out" '.ok==false and (.error|contains("revision"))' 'update revision mismatch rejected'
 [[ $(find "$XDG_STATE_HOME/oma_plug_sea" -name 'shell.json.*' | wc -l) -ge 1 ]]
 for backup in "$XDG_STATE_HOME/oma_plug_sea"/shell.json.*; do cmp "$HOME/.config/omarchy/shell.json" "$backup"; done

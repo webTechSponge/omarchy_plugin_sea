@@ -26,7 +26,7 @@ Ui.BorderSurface {
         Text { width: parent.width; text: (card.plugin.author || "Community") + (card.plugin.version ? "  ·  v" + card.plugin.version : ""); textFormat: Text.PlainText; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
         Text { width: parent.width; height: 40; text: card.plugin.description || "No description provided."; textFormat: Text.PlainText; color: Color.foreground; opacity: 0.85; font.family: Style.font.family; font.pixelSize: Style.font.body; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
         Text { width: parent.width; text: Catalog.status(card.plugin) + "  ·  " + (card.plugin.category || "Community"); textFormat: Text.PlainText; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
-        Text { width: parent.width; text: card.plugin.localOnly ? "Local source · review code" : (card.plugin.verificationStatus || "Unverified") + " · browse metadata"; textFormat: Text.PlainText; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
+        Text { width: parent.width; text: Catalog.verificationLabel(card.plugin); textFormat: Text.PlainText; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
     }
     MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { card.forceActiveFocus(); card.activated(); } }
 }

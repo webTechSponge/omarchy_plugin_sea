@@ -129,7 +129,7 @@ Item {
     function requestAction(action) {
         if (busy || refreshing || checking || !detail) return;
         if (action === "disable") { runAction(action, detail); return; }
-        pendingPlugin = detail;
+        pendingPlugin = JSON.parse(JSON.stringify(detail));
         pendingAction = action;
         Qt.callLater(function() { cancelButton.forceActiveFocus(); });
     }
@@ -137,12 +137,13 @@ Item {
         if (!pendingPlugin) return "";
         var p = pendingPlugin;
         if (pendingAction === "remove") return "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
-        return "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + ((p.local && p.local.repo) || p.repo || "Local plugin directory") + "\nVerification: " + (p.verificationStatus || "Not verified") + "\nReviewed listing commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
+        return "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
     }
     function runAction(action, plugin) {
         if (busy || refreshing || checking) return;
         var args = [helperDir + "oma-plug-sea-action", action, plugin.id];
         if (action === "install" || action === "install-enable") args.push(plugin.repo);
+        if (action === "update") args.push(Catalog.sourceUrl(plugin));
         if (["install", "install-enable", "enable", "update"].indexOf(action) >= 0) args.push("--consent-unsandboxed");
         if (action === "remove") args.push("--confirm-remove");
         pendingAction = "";

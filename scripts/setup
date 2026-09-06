@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-for tool in bash curl jq git flock prlimit timeout omarchy omarchy-shell quickshell qmllint perl; do
+for tool in bash curl jq git flock prlimit timeout omarchy omarchy-shell quickshell qmllint perl rg; do
   command -v "$tool" >/dev/null || { echo "Missing required system tool: $tool" >&2; exit 1; }
 done
 project=$(cd -- "$(dirname -- "$0")/.." && pwd)
