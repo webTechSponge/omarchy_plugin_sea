@@ -292,7 +292,6 @@ Item {
                     anchors.fill: parent; spacing: 14
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
-                        Ui.Button { visible: !!root.detail; text: "← Back"; focusable: true; bordered: true; onClicked: root.back() }
                         Image {
                             visible: !!root.detail
                             Layout.preferredWidth: 42; Layout.preferredHeight: 42
@@ -300,6 +299,7 @@ Item {
                             sourceSize: Qt.size(84, 84); fillMode: Image.PreserveAspectFit
                             Accessible.role: Accessible.Graphic; Accessible.name: "Omarchy Plugin Sea"
                         }
+                        Ui.Button { visible: !!root.detail; text: "← Back"; focusable: true; bordered: true; onClicked: root.back() }
                         ColumnLayout {
                             Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 4
                             Image {
