@@ -305,6 +305,13 @@ ln -s "$tmp/decoy-git" "$HOME/.config/omarchy/plugins/test.gitlink/.git"
 "$local_helper" >"$tmp/out"
 assert "$tmp/out" '.ok and all(.plugins[];select(.id=="test.gitlink")|.version=="" and .localPath=="")' 'symlinked .git contributes no metadata'
 rm -rf -- "$HOME/.config/omarchy/plugins/test.gitlink"
+printf '[{"id":"test.dirlink","name":"DirLink","enabled":false}]' >"$tmp/local.json"
+mkdir -p "$tmp/decoy-dir"
+printf '{"version":"9.9","description":"decoy"}' >"$tmp/decoy-dir/manifest.json"
+ln -s "$tmp/decoy-dir" "$HOME/.config/omarchy/plugins/test.dirlink"
+"$local_helper" >"$tmp/out"
+assert "$tmp/out" '.ok and all(.plugins[];select(.id=="test.dirlink")|.version=="" and .localPath=="")' 'symlinked plugin dir contributes no metadata'
+rm -rf -- "$HOME/.config/omarchy/plugins/test.dirlink"
 rm -f "$XDG_CACHE_HOME/oma_plug_sea/catalog.json"
 TEST_NETWORK_FAIL=1 "$cat_helper" check >"$tmp/out"
 assert "$tmp/out" '.ok and .refreshNeeded' 'no saved catalog requires refresh without making a network request'
