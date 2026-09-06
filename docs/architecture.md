@@ -1,6 +1,6 @@
 # Architecture and contracts
 
-The host is the existing Omarchy Quickshell process. `local.oma-plug-sea` is an overlay with `keepLoaded: true`, a root `open(payloadJson)` / `close()` contract, injected manifest and registry, and theme tokens from `qs.Commons` with shared `qs.Ui` controls. The local namespace deliberately identifies a development application; it claims neither the reserved Omarchy namespace nor an upstream publisher identity.
+The host is the existing Omarchy Quickshell process. `webtechsponge.plugin-sea` is an overlay with `keepLoaded: true`, a root `open(payloadJson)` / `close()` contract, injected manifest and registry, and theme tokens from `qs.Commons` with shared `qs.Ui` controls. The permanent author namespace is `webtechsponge`, with manifest author **webTechSponge** and an MIT license. It does not claim the reserved `omarchy.*` namespace or imply registry verification.
 
 QML starts asynchronous `Quickshell.Io.Process` instances using argument arrays and resolves helpers relative to the loaded QML entrypoint directory. Search, filter, and sort context remain in memory across refreshes. Catalog/local correlation uses exact canonical IDs. Git update availability is unknown until a real update check; catalog versions are not a reliable installed revision comparison.
 
@@ -22,7 +22,7 @@ The normalized catalog is `{schemaVersion:1,ok,source,fetchedAt,generatedAt,stal
 
 Browse metadata never supplies a command. Sources are normalized canonical HTTPS GitHub repository URLs; mutable repository HEAD is not an authenticated reviewed artifact. The consent view identifies this mismatch and offers disabled installation first. The helper rechecks cached listing availability but that is only a usability gate, not code authentication. The installed Omarchy CLI owns Git cloning, manifest validation, placement, update and removal.
 
-Actions serialize with `flock`, time out, back up existing shell.json, and verify post-action state. Install-and-enable performs disabled installation first, confirms the expected ID, then enables. A changed manifest ID fails confirmation and leaves the unexpected disabled checkout for inspection. Actions never claim success based solely on CLI stdout. The browser refuses to mutate itself so it cannot tear down its own in-flight process; remove a standard Git installation through the terminal with `omarchy plugin remove local.oma-plug-sea`, or use `mise run uninstall` for the managed development copy.
+Actions serialize with `flock`, time out, back up existing shell.json, and verify post-action state. Install-and-enable performs disabled installation first, confirms the expected ID, then enables. A changed manifest ID fails confirmation and leaves the unexpected disabled checkout for inspection. Actions never claim success based solely on CLI stdout. The browser refuses to mutate itself so it cannot tear down its own in-flight process; remove a standard Git installation through the terminal with `omarchy plugin remove webtechsponge.plugin-sea`, or use `mise run uninstall` for the managed development copy.
 
 Before installing, dormant configured IDs that are absent from discovery cause a refusal: an unexpected cloned ID matching such a reference could otherwise auto-enable. The helper does not silently remove those references.
 
@@ -79,3 +79,9 @@ Standard builds live under the private XDG cache at oma_plug_sea/decoder-builds/
 Standard overlays open through the supported shell summon IPC; the stock installer does not generate launchers or menu extensions. The managed development workflow is separate and supplies its own launcher/Browse entry. Root preview.png is the marketplace screenshot and the README's image source.
 
 When refreshing listing screenshots, update both `docs/screenshots/browser-transparent-logo.png` and the root `preview.png`; README uses the root file and historical verification links use the docs path. Keep the two current screenshot files byte-identical.
+
+## Plugin ID migration
+
+The application moved from development ID `local.oma-plug-sea` to permanent ID `webtechsponge.plugin-sea`. CLI names and `oma_plug_sea` cache/state identifiers stay stable; the inert test fixture remains `local.oma-plug-sea-smoke`. Identity comparisons, self-mutation protection, installed directories and shell IPC use the permanent ID.
+
+Migration is explicit: uninstall a managed development copy with the old checkout's scripts **before updating that checkout**, then install from the new source. For standard Git installs, back up local edits, hide and remove the old ID through Omarchy, then install the new ID. Updating an old checkout in place does not migrate its directory or shell configuration. See the [migration commands](../README.md#migration-from-the-development-id).

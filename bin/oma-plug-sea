@@ -4,10 +4,10 @@ if ! command -v omarchy-shell >/dev/null || ! timeout 5 omarchy-shell shell ping
   echo 'Omarchy Plugin Sea: omarchy-shell is unavailable. Run: omarchy restart shell' >&2
   exit 1
 fi
-result=$(timeout 10 omarchy-shell shell summon local.oma-plug-sea '{}')
+result=$(timeout 10 omarchy-shell shell summon webtechsponge.plugin-sea '{}')
 [[ $result == ok ]] || { printf 'Omarchy Plugin Sea: cannot open (%s). Run scripts/dev-install from the project.\n' "$result" >&2; exit 1; }
 for ((attempt=0; attempt<30; attempt++)); do
-  if omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e '.opened == true' >/dev/null 2>&1; then exit 0; fi
+  if omarchy-shell shell call webtechsponge.plugin-sea status '{}' | jq -e '.opened == true' >/dev/null 2>&1; then exit 0; fi
   sleep 0.1
 done
 echo 'Omarchy Plugin Sea: shell accepted summon but the surface did not load. Inspect quickshell logs and re-run scripts/dev-install.' >&2

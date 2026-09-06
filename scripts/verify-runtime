@@ -2,7 +2,7 @@
 # Read-only verification. --installed checks disk; default also checks live QML.
 set -euo pipefail
 project=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
-plugin=$HOME/.config/omarchy/plugins/local.oma-plug-sea
+plugin=$HOME/.config/omarchy/plugins/webtechsponge.plugin-sea
 fail() { printf 'Runtime verification failed: %s\nRun mise run install from this checkout; restart the shell if its QML cache remains stale.\n' "$*" >&2; exit 1; }
 [[ $# == 0 || ( $# == 1 && $1 == --installed ) ]] || fail 'usage: scripts/verify-runtime [--installed]'
 [[ -d $plugin && ! -L $plugin && -f $plugin/.oma-plug-sea-managed ]] || fail 'managed installation is missing'
@@ -17,7 +17,7 @@ actual=$("$project/scripts/runtime-fingerprint" "$runtime")
 stamped=$(sed -n 's/^[[:space:]]*readonly property string runtimeFingerprint: "\([a-f0-9]\{64\}\)"[[:space:]]*$/\1/p' "$runtime/PluginBrowser.qml")
 [[ $stamped == "$expected" ]] || fail 'installed QML fingerprint stamp is missing or outdated'
 if [[ $# == 0 ]]; then
-  status=$(timeout 5 omarchy-shell shell call local.oma-plug-sea status '{}') || fail 'cannot read live shell status'
+  status=$(timeout 5 omarchy-shell shell call webtechsponge.plugin-sea status '{}') || fail 'cannot read live shell status'
   jq -e --arg expected "$expected" '.runtimeFingerprint == $expected' <<<"$status" >/dev/null || fail 'running QML is stale or from another build'
 fi
 printf 'Verified current checkout runtime: %s\n' "$expected"

@@ -49,7 +49,7 @@ cat > "$launcher" <<'LAUNCH'
 #!/usr/bin/env bash
 # oma-plug-sea managed launcher
 set -euo pipefail
-plugin="$HOME/.config/omarchy/plugins/local.oma-plug-sea"
+plugin="$HOME/.config/omarchy/plugins/webtechsponge.plugin-sea"
 build=$(jq -er '.entryPoints.overlay | capture("^runtime/(?<build>[a-f0-9]{64})/PluginBrowser.qml$").build' "$plugin/manifest.json")
 exec "$plugin/runtime/$build/bin/oma-plug-sea" "$@"
 LAUNCH
@@ -58,10 +58,10 @@ if [[ ! -f $menu_file ]]; then printf '{\n}\n' > "$menu_file"; fi
 if ! grep -q '// BEGIN oma_plug_sea' "$menu_file"; then
   backup "$menu_file"
   # Insert a self-contained JSONC property; preserve every existing byte after {.
-  perl -0777 -i -pe 's/\A((?:\s|\/\/[^\n]*\n|\/\*.*?\*\/)*\{)/$1\n  \/\/ BEGIN oma_plug_sea\n  "setup.plugin.browse": {"label":"Browse","icon":"󰐱","description":"Browse community plugins with Omarchy Plugin Sea","action":"omarchy-shell shell summon local.oma-plug-sea '\''{}'\''"},\n  \/\/ END oma_plug_sea/s or die "Expected a JSONC root object; restore menu backup if needed\n"' "$menu_file"
+  perl -0777 -i -pe 's/\A((?:\s|\/\/[^\n]*\n|\/\*.*?\*\/)*\{)/$1\n  \/\/ BEGIN oma_plug_sea\n  "setup.plugin.browse": {"label":"Browse","icon":"󰐱","description":"Browse community plugins with Omarchy Plugin Sea","action":"omarchy-shell shell summon webtechsponge.plugin-sea '\''{}'\''"},\n  \/\/ END oma_plug_sea/s or die "Expected a JSONC root object; restore menu backup if needed\n"' "$menu_file"
 fi
 omarchy-shell shell rescanPlugins
-wait_for_plugin 'any(.[]; .id == "local.oma-plug-sea")'
-omarchy plugin enable local.oma-plug-sea
-wait_for_plugin 'any(.[]; .id == "local.oma-plug-sea" and .enabled)'
+wait_for_plugin 'any(.[]; .id == "webtechsponge.plugin-sea")'
+omarchy plugin enable webtechsponge.plugin-sea
+wait_for_plugin 'any(.[]; .id == "webtechsponge.plugin-sea" and .enabled)'
 printf 'Installed. Open: oma-plug-sea (or Setup → Plugins → Browse). Backups: %s/backups\n' "$state_home"

@@ -78,7 +78,7 @@ Item {
         if (busy) { operationMessage = "Please wait for the current action to finish."; return; }
         previewSource = "";
         opened = false;
-        if (shell) shell.hide(manifest ? manifest.id : "local.oma-plug-sea");
+        if (shell) shell.hide(manifest ? manifest.id : "webtechsponge.plugin-sea");
     }
     function back() {
         if (previewSource) { closePreview(); return; }

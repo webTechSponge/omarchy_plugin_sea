@@ -18,7 +18,7 @@ if [[ $(basename "$0") == omarchy-shell ]]; then
     hide) : ;;
     call)
       if [[ -f $HOME/live-fingerprint ]]; then fingerprint=$(cat "$HOME/live-fingerprint")
-      else fingerprint=$(sed -n 's/^[[:space:]]*readonly property string runtimeFingerprint: "\([a-f0-9]\{64\}\)"[[:space:]]*$/\1/p' "$HOME/.config/omarchy/plugins/local.oma-plug-sea/$(jq -r '.entryPoints.overlay' "$HOME/.config/omarchy/plugins/local.oma-plug-sea/manifest.json")"); fi
+      else fingerprint=$(sed -n 's/^[[:space:]]*readonly property string runtimeFingerprint: "\([a-f0-9]\{64\}\)"[[:space:]]*$/\1/p' "$HOME/.config/omarchy/plugins/webtechsponge.plugin-sea/$(jq -r '.entryPoints.overlay' "$HOME/.config/omarchy/plugins/webtechsponge.plugin-sea/manifest.json")"); fi
       jq -n --arg fingerprint "$fingerprint" '{runtimeFingerprint:$fingerprint}'
       ;;
     *) echo 'Unexpected shell command' >&2; exit 2 ;;
@@ -26,20 +26,20 @@ if [[ $(basename "$0") == omarchy-shell ]]; then
   exit
 fi
 [[ ${1:-} == plugin ]] || exit 2
-plugin=$HOME/.config/omarchy/plugins/local.oma-plug-sea
+plugin=$HOME/.config/omarchy/plugins/webtechsponge.plugin-sea
 case ${2:-} in
   validate)
     [[ -f $3/manifest.json ]]
     entry=$(jq -r '.entryPoints.overlay' "$3/manifest.json")
     [[ -f $3/$entry ]]
-    jq -e '.id == "local.oma-plug-sea"' "$3/manifest.json" >/dev/null
+    jq -e '.id == "webtechsponge.plugin-sea"' "$3/manifest.json" >/dev/null
     ;;
   list)
     polls=$(cat "$HOME/polls" 2>/dev/null || echo 0)
     polls=$((polls + 1)); printf '%s\n' "$polls" > "$HOME/polls"
     if [[ -d $plugin && $polls -ge 3 ]]; then
       enabled=false; [[ ! -f $HOME/enabled ]] || enabled=true
-      printf '[{"id":"local.oma-plug-sea","enabled":%s}]\n' "$enabled"
+      printf '[{"id":"webtechsponge.plugin-sea","enabled":%s}]\n' "$enabled"
     else echo '[]'; fi
     ;;
   enable)
@@ -78,9 +78,9 @@ MENU
 cp "$menu" "$test_root/original-menu"
 cp "$test_home/.config/omarchy/shell.json" "$test_root/original-shell"
 run dev-install || fail 'first install'
-[[ -f $test_home/.config/omarchy/plugins/local.oma-plug-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
+[[ -f $test_home/.config/omarchy/plugins/webtechsponge.plugin-sea/.oma-plug-sea-managed ]] || fail 'missing ownership marker'
 [[ -x $test_home/.local/bin/oma-plug-sea ]] || fail 'launcher not executable'
-installed_root=$test_home/.config/omarchy/plugins/local.oma-plug-sea
+installed_root=$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea
 installed_entry=$(jq -r '.entryPoints.overlay' "$installed_root/manifest.json")
 [[ $installed_entry =~ ^runtime/[a-f0-9]{64}/PluginBrowser.qml$ ]] || fail 'entrypoint lacks unique build URL'
 installed_runtime=$installed_root/${installed_entry%/PluginBrowser.qml}
@@ -96,10 +96,10 @@ installed_lib=$installed_runtime/lib
 cp "$menu" "$test_root/installed-menu"
 run dev-install || fail 'idempotent install'
 cmp -s "$menu" "$test_root/installed-menu" || fail 'reinstall changed menu'
-[[ $(rg -c 'plugin enable local.oma-plug-sea' "$test_home/cli.log") == 2 ]] || fail 'enable count'
+[[ $(rg -c 'plugin enable webtechsponge.plugin-sea' "$test_home/cli.log") == 2 ]] || fail 'enable count'
 # Fingerprints must prove both installed bytes and the in-memory QML build.
 run verify-runtime || fail 'current runtime fingerprint'
-installed_root=$test_home/.config/omarchy/plugins/local.oma-plug-sea
+installed_root=$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea
 cp "$installed_root/.oma-plug-sea-managed" "$test_root/owner"
 printf '/a/different/checkout\n' > "$installed_root/.oma-plug-sea-managed"
 expect_reject verify-runtime 'different checkout ownership'
@@ -120,7 +120,7 @@ printf 'PASS: runtime fingerprint rejects wrong checkout, stale installed files 
 run dev-uninstall || fail 'uninstall'
 cmp -s "$menu" "$test_root/original-menu" || fail 'menu did not round-trip byte-for-byte'
 cmp -s "$test_home/.config/omarchy/shell.json" "$test_root/original-shell" || fail 'unrelated shell config changed'
-[[ ! -e $test_home/.config/omarchy/plugins/local.oma-plug-sea && ! -e $test_home/.local/bin/oma-plug-sea ]] || fail 'uninstall residue'
+[[ ! -e $test_home/.config/omarchy/plugins/webtechsponge.plugin-sea && ! -e $test_home/.local/bin/oma-plug-sea ]] || fail 'uninstall residue'
 shopt -s nullglob
 backups=("$test_home/.local/state/oma_plug_sea/backups/omarchy-menu.jsonc."*)
 (( ${#backups[@]} >= 2 )) || fail 'missing timestamped menu backups'
@@ -130,12 +130,12 @@ run dev-uninstall || fail 'idempotent uninstall'
 printf 'PASS: install, asynchronous discovery, idempotence, exact JSONC round-trip, backups, cleanup\n'
 
 new_home unowned
-mkdir -p "$test_home/.config/omarchy/plugins/local.oma-plug-sea"
-printf 'owned by user\n' > "$test_home/.config/omarchy/plugins/local.oma-plug-sea/personal"
+mkdir -p "$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea"
+printf 'owned by user\n' > "$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea/personal"
 expect_reject dev-install 'unowned plugin'
 expect_reject dev-uninstall 'unowned plugin removal'
-[[ $(cat "$test_home/.config/omarchy/plugins/local.oma-plug-sea/personal") == 'owned by user' ]] || fail 'unowned plugin changed'
-rm -r "$test_home/.config/omarchy/plugins/local.oma-plug-sea"
+[[ $(cat "$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea/personal") == 'owned by user' ]] || fail 'unowned plugin changed'
+rm -r "$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea"
 printf 'personal launcher\n' > "$test_home/.local/bin/oma-plug-sea"
 expect_reject dev-install 'unowned launcher'
 [[ $(cat "$test_home/.local/bin/oma-plug-sea") == 'personal launcher' ]] || fail 'unowned launcher changed'
@@ -148,7 +148,7 @@ for target in plugin launcher menu; do
   new_home "symlink-$target"
   mkdir -p "$test_home/.config/omarchy/plugins"
   case $target in
-    plugin) link=$test_home/.config/omarchy/plugins/local.oma-plug-sea ;;
+    plugin) link=$test_home/.config/omarchy/plugins/webtechsponge.plugin-sea ;;
     launcher) link=$test_home/.local/bin/oma-plug-sea ;;
     menu) link=$test_home/.config/omarchy/extensions/omarchy-menu.jsonc ;;
   esac

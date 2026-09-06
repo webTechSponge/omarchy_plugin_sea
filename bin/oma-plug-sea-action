@@ -13,7 +13,7 @@ finish() {
 }
 valid_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ && $1 != *..* ]]; }
 [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || finish false 'Invalid plugin ID.'
-[[ $id != local.oma-plug-sea ]] || finish false 'Manage Omarchy Plugin Sea using its documented development uninstall command.'
+[[ $id != webtechsponge.plugin-sea ]] || finish false 'Manage Omarchy Plugin Sea using its documented development uninstall command.'
 case $action in
   install|install-enable) [[ $# == 2 ]] || finish false 'Installation requires an exact source and explicit consent.'; source_url=$1; consent=$2; valid_url "$source_url" || finish false 'Only canonical HTTPS GitHub repositories are supported.' ;;
   update) [[ $# == 2 ]] || finish false 'Update requires an exact approved source and explicit consent.'; source_url=$1; consent=$2; valid_url "$source_url" || finish false 'Only canonical HTTPS GitHub repositories are supported.' ;;

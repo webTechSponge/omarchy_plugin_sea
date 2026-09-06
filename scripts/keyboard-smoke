@@ -6,7 +6,7 @@ command -v wtype >/dev/null
 scripts/open-verified-runtime
 assert_status() {
   for ((attempt=0;attempt<100;attempt++)); do
-    if omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e "$1" >/dev/null; then return 0; fi
+    if omarchy-shell shell call webtechsponge.plugin-sea status '{}' | jq -e "$1" >/dev/null; then return 0; fi
     sleep 0.1
   done
   echo "UI postcondition failed: $1" >&2; exit 1
@@ -14,7 +14,7 @@ assert_status() {
 send_keys() {
   # Refuse input if a rescan replaced the overlay or dismissed the tested UI.
   scripts/verify-runtime >/dev/null
-  timeout 5 omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e '.opened==true' >/dev/null || {
+  timeout 5 omarchy-shell shell call webtechsponge.plugin-sea status '{}' | jq -e '.opened==true' >/dev/null || {
     echo 'Refusing keyboard input: tested browser is no longer open.' >&2; exit 1;
   }
   wtype "$@"

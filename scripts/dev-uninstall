@@ -7,8 +7,8 @@ if [[ -e $plugin_dir && ! -f $plugin_dir/.oma-plug-sea-managed ]]; then
 fi
 if [[ -d $plugin_dir ]]; then
   backup "$config_home/omarchy/shell.json"
-  omarchy-shell shell hide local.oma-plug-sea
-  omarchy plugin disable local.oma-plug-sea
+  omarchy-shell shell hide webtechsponge.plugin-sea
+  omarchy plugin disable webtechsponge.plugin-sea
   mkdir -p "$state_home"
   mv -- "$plugin_dir" "$state_home/removed-plugin.$(date +%Y%m%dT%H%M%S%N)"
 fi
@@ -20,5 +20,5 @@ if [[ -f $launcher ]] && grep -q '^# oma-plug-sea managed launcher$' "$launcher"
   backup "$launcher"; rm -- "$launcher"
 fi
 omarchy-shell shell rescanPlugins
-wait_for_plugin 'all(.[]; .id != "local.oma-plug-sea")'
+wait_for_plugin 'all(.[]; .id != "webtechsponge.plugin-sea")'
 printf 'Development integration removed. Recoverable files remain in %s\n' "$state_home"

@@ -4,7 +4,7 @@ set -euo pipefail
 project=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 config_home=$HOME/.config
 state_home=${XDG_STATE_HOME:-$HOME/.local/state}/oma_plug_sea
-plugin_dir=$config_home/omarchy/plugins/local.oma-plug-sea
+plugin_dir=$config_home/omarchy/plugins/webtechsponge.plugin-sea
 menu_file=$config_home/omarchy/extensions/omarchy-menu.jsonc
 launcher=${XDG_BIN_HOME:-$HOME/.local/bin}/oma-plug-sea
 mkdir -p "$state_home"

@@ -20,14 +20,31 @@ On first preview use, the app automatically compiles its bundled Qt decoder into
 ## Open
 
 ```bash
-omarchy-shell shell summon local.oma-plug-sea '{}'
+omarchy-shell shell summon webtechsponge.plugin-sea '{}'
 ```
 
 For a standard Git installation, this is the opening command. Omarchy does not automatically create menu entries or launchers for overlays. The separate development-install workflow below adds `oma-plug-sea` and **Setup → Plugins → Browse**.
 
-To update a standard installation, close the browser and run `omarchy plugin update local.oma-plug-sea`. To remove it, run `omarchy plugin remove local.oma-plug-sea`. The preview cache is retained and can be removed separately.
+To update a standard installation, close the browser and run `omarchy plugin update webtechsponge.plugin-sea`. To remove it, run `omarchy plugin remove webtechsponge.plugin-sea`. The preview cache is retained and can be removed separately.
 
-The repository directory is `omarchy_plugin_sea` and the visible application name is **Omarchy Plugin Sea**. The existing `oma-plug-sea` command, `local.oma-plug-sea` manifest ID, and cache/state paths are retained for compatibility.
+The repository directory is `omarchy_plugin_sea` and the visible application name is **Omarchy Plugin Sea**. The permanent manifest ID is `webtechsponge.plugin-sea`, authored by **webTechSponge** under the MIT license. The existing `oma-plug-sea` command and `oma_plug_sea` cache/state paths remain unchanged.
+
+## Migration from the development ID
+
+The permanent plugin ID is now `webtechsponge.plugin-sea`; earlier installations used `local.oma-plug-sea`. Remove the old installation before installing the new ID. An in-place Git update is not an ID migration.
+
+For a **managed development installation**, run `mise run uninstall` from the **old checkout before updating its source**. Its old scripts remove the old ID, launcher and marked menu entry with recoverable backups. Then update the checkout and run `mise run install` to install the new ID. Do not run the new uninstall script to remove an old-ID installation.
+
+For a **standard Git installation**, first back up any edits in `~/.config/omarchy/plugins/local.oma-plug-sea`; the removal command deletes that Git checkout. Then close and remove the old plugin and install the new one:
+
+```bash
+omarchy-shell shell hide local.oma-plug-sea
+omarchy plugin remove local.oma-plug-sea
+omarchy plugin add https://github.com/webTechSponge/omarchy_plugin_sea --enable
+omarchy-shell shell summon webtechsponge.plugin-sea '{}'
+```
+
+Existing catalog, preview and decoder caches remain usable because their storage identifiers have not changed. If you have already updated the old checkout, recover its previous scripts before uninstalling, or review and remove the old integration separately; the new installer does not silently migrate user configuration.
 
 ## Development setup
 
@@ -50,7 +67,7 @@ mise run install
 mise run open
 ```
 
-`mise.toml` intentionally uses the system's matching Qt/Omarchy runtime instead of downloading a conflicting language stack. Setup builds the native preview helper and checks decoder support and native dependencies. The development installer copies the runtime files into `~/.config/omarchy/plugins/local.oma-plug-sea`, creates `~/.local/bin/oma-plug-sea`, and adds one marked `setup.plugin.browse` property to the supported menu extension. It preserves other entries and comments, refuses unowned targets and symlinks, and backs up existing files under `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea/` before changes. No files under `/usr/share/omarchy` are edited.
+`mise.toml` intentionally uses the system's matching Qt/Omarchy runtime instead of downloading a conflicting language stack. Setup builds the native preview helper and checks decoder support and native dependencies. The development installer copies the runtime files into `~/.config/omarchy/plugins/webtechsponge.plugin-sea`, creates `~/.local/bin/oma-plug-sea`, and adds one marked `setup.plugin.browse` property to the supported menu extension. It preserves other entries and comments, refuses unowned targets and symlinks, and backs up existing files under `${XDG_STATE_HOME:-~/.local/state}/oma_plug_sea/` before changes. No files under `/usr/share/omarchy` are edited.
 
 Re-run `mise run install` after source changes. Omarchy validates against symlinks, so this uses a copy rather than a development symlink. If Quickshell retains a stale imported component after editing QML, run `omarchy restart shell` once and reopen. The installed host currently hardcodes `~/.config/omarchy`; cache and state storage honor XDG variables.
 
@@ -122,11 +139,11 @@ omarchy plugin list --json
 omarchy-shell shell rescanPlugins
 # Run this helper command from the project checkout:
 bin/oma-plug-sea-catalog refresh | jq '{ok,stale,error,count:(.plugins|length)}'
-omarchy-shell shell call local.oma-plug-sea status '{}'
+omarchy-shell shell call webtechsponge.plugin-sea status '{}'
 quickshell log -p "$OMARCHY_PATH/shell" -t 100 --no-color
 ```
 
-If the shell is stopped, use `omarchy restart shell`. A standard Git installation does not add `oma-plug-sea` to PATH; use the [Open](#open) IPC command. The `~/.local/bin/oma-plug-sea` launcher exists only after development integration. If summon reports that the plugin is disabled, run `omarchy plugin enable local.oma-plug-sea` and try again. A source/ID mismatch requires inspecting local plugin directories before retrying. A dormant-reference error requires reviewing stale shell.json references; restore from a backup if needed. An action lock error means another browser operation is running. Terminal-driven operations do not share this lock, so concurrent external changes can fail a postcondition and require refresh.
+If the shell is stopped, use `omarchy restart shell`. A standard Git installation does not add `oma-plug-sea` to PATH; use the [Open](#open) IPC command. The `~/.local/bin/oma-plug-sea` launcher exists only after development integration. If summon reports that the plugin is disabled, run `omarchy plugin enable webtechsponge.plugin-sea` and try again. A source/ID mismatch requires inspecting local plugin directories before retrying. A dormant-reference error requires reviewing stale shell.json references; restore from a backup if needed. An action lock error means another browser operation is running. Terminal-driven operations do not share this lock, so concurrent external changes can fail a postcondition and require refresh.
 
 ### Preview setup problems
 
@@ -135,7 +152,7 @@ The first uncached preview may show **Preparing preview…** while the bundled d
 For a standard Git installation, this optional diagnostic command prepares the decoder and prints its cached executable path:
 
 ```bash
-~/.config/omarchy/plugins/local.oma-plug-sea/bin/oma-plug-sea-build-preview
+~/.config/omarchy/plugins/webtechsponge.plugin-sea/bin/oma-plug-sea-build-preview
 ```
 
 The decoder cache is `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/decoder-builds/`; downloaded/converted images are in the sibling `previews/` directory. Builds are keyed by source and toolchain, so updates rebuild automatically when needed. Removing these caches is optional; subsequent previews recreate them. Already cached PNGs can be displayed without a compiler or a new download.
@@ -145,7 +162,7 @@ The decoder cache is `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/decoder-builds/`;
 For a **standard Git installation**, close the browser and use Omarchy's normal removal command:
 
 ```bash
-omarchy plugin remove local.oma-plug-sea
+omarchy plugin remove webtechsponge.plugin-sea
 ```
 
 This removes the installed Git checkout through Omarchy. Reinstall with the [standard install commands](#install).
@@ -184,7 +201,7 @@ The app cannot reliably show an update-available badge for each installed plugin
 
 Plugin Sea cannot disable or uninstall itself through its own interface. Doing so could interrupt an operation before it finishes or reports its result.
 
-For a standard Git installation, run `omarchy plugin remove local.oma-plug-sea`. For the managed development installation, run `mise run uninstall` from this project's directory while the Omarchy shell is running. The development command also removes its launcher and menu entry while retaining recovery backups. See [Removal and recovery](#removal-and-recovery) for details.
+For a standard Git installation, run `omarchy plugin remove webtechsponge.plugin-sea`. For the managed development installation, run `mise run uninstall` from this project's directory while the Omarchy shell is running. The development command also removes its launcher and menu entry while retaining recovery backups. See [Removal and recovery](#removal-and-recovery) for details.
 
 ### Missing information does not mean missing permissions
 

@@ -7,7 +7,7 @@ for ((attempt=0;attempt<20;attempt++)); do
   if "$project/bin/oma-plug-sea" >/dev/null 2>&1 && "$project/scripts/verify-runtime" >/dev/null 2>&1; then
     sleep 0.25
     if "$project/scripts/verify-runtime" >/dev/null 2>&1 && \
-      timeout 5 omarchy-shell shell call local.oma-plug-sea status '{}' | jq -e '.opened==true' >/dev/null; then
+      timeout 5 omarchy-shell shell call webtechsponge.plugin-sea status '{}' | jq -e '.opened==true' >/dev/null; then
       echo 'Current checkout overlay is open and runtime fingerprint verified.'
       exit 0
     fi

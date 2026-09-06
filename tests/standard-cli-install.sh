@@ -52,13 +52,13 @@ run_isolated git -C "$source_repo" add .
 run_isolated git -C "$source_repo" -c user.name='Local integration fixture' -c user.email='fixture@example.invalid' commit -qm 'Disposable standard-install fixture'
 # Invoke the actual packaged add; its validate/catalog subprocesses remain real.
 run_isolated "$platform/bin/omarchy" plugin add "$source_repo" --yes > "$tmp/add-output" 2>&1 || { cat "$tmp/add-output" >&2; exit 1; }
-installed=$isolated_home/.config/omarchy/plugins/local.oma-plug-sea
+installed=$isolated_home/.config/omarchy/plugins/webtechsponge.plugin-sea
 [[ -d $installed/.git && ! -e $installed/lib/preview-decode ]]
 [[ -f $installed/lib/preview-decode.cpp && -x $installed/bin/oma-plug-sea-build-preview && -x $installed/scripts/build-preview ]]
 entry=$(jq -r '.entryPoints.overlay' "$installed/manifest.json")
 [[ $entry == PluginBrowser.qml && -f $installed/$entry ]]
 run_isolated "$platform/bin/omarchy" plugin validate "$installed"
-run_isolated "$platform/bin/omarchy" plugin catalog | jq -e --arg dir "$installed" 'any(.[]; .id=="local.oma-plug-sea" and .sourceDir==$dir)' >/dev/null
+run_isolated "$platform/bin/omarchy" plugin catalog | jq -e --arg dir "$installed" 'any(.[]; .id=="webtechsponge.plugin-sea" and .sourceDir==$dir)' >/dev/null
 [[ $(cat "$isolated_home/shell-calls") == 'shell rescanPlugins' ]]
 [[ ! -e $isolated_home/.config/omarchy/shell.json && ! -e $isolated_home/.config/omarchy/extensions/omarchy-menu.jsonc ]]
 [[ -z $(run_isolated git -C "$installed" status --porcelain) ]]

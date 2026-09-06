@@ -63,8 +63,8 @@ ColumnLayout {
         Ui.Button { visible: !detail.plugin.local && !!detail.plugin.installAvailable; text: "Install disabled"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("install") }
         Ui.Button { visible: !detail.plugin.local && !!detail.plugin.installAvailable; text: "Install & enable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("install-enable") }
         Ui.Button { visible: !!detail.plugin.local && !detail.plugin.local.enabled; text: "Enable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("enable") }
-        Ui.Button { visible: !!detail.plugin.local && !!detail.plugin.local.enabled && detail.plugin.local.canDisable !== false && detail.plugin.id !== "local.oma-plug-sea"; text: "Disable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("disable") }
+        Ui.Button { visible: !!detail.plugin.local && !!detail.plugin.local.enabled && detail.plugin.local.canDisable !== false && detail.plugin.id !== "webtechsponge.plugin-sea"; text: "Disable"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("disable") }
         Ui.Button { visible: !!detail.plugin.local && !!detail.plugin.local.gitManaged && !detail.plugin.local.firstParty; text: "Check & update"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("update") }
-        Ui.Button { visible: !!detail.plugin.local && !detail.plugin.local.firstParty && detail.plugin.id !== "local.oma-plug-sea"; text: "Remove"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("remove") }
+        Ui.Button { visible: !!detail.plugin.local && !detail.plugin.local.firstParty && detail.plugin.id !== "webtechsponge.plugin-sea"; text: "Remove"; bordered: true; focusable: true; enabled: !detail.busy; onClicked: detail.actionRequested("remove") }
     }
 }

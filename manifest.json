@@ -1,9 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "local.oma-plug-sea",
+  "id": "webtechsponge.plugin-sea",
   "name": "Omarchy Plugin Sea",
   "version": "0.1.0",
-  "author": "Omarchy Plugin Sea contributors",
+  "author": "webTechSponge",
+  "license": "MIT",
   "description": "A native community plugin browser with explicit installation consent.",
   "kinds": ["overlay"],
   "entryPoints": { "overlay": "PluginBrowser.qml" },

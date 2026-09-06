@@ -4,7 +4,7 @@ cd -- "$(dirname -- "$0")/.."
 command -v jq >/dev/null
 timeout 5 omarchy-shell shell ping >/dev/null
 scripts/open-verified-runtime
-status() { omarchy-shell shell call local.oma-plug-sea status '{}'; }
+status() { omarchy-shell shell call webtechsponge.plugin-sea status '{}'; }
 status | jq -e '.opened==true' >/dev/null
 for ((i=0;i<120;i++)); do
   result=$(status)
@@ -12,7 +12,7 @@ for ((i=0;i<120;i++)); do
   sleep 0.25
 done
 jq -e '.count>0 and .localError==""' <<<"$result" >/dev/null
-omarchy-shell shell hide local.oma-plug-sea
+omarchy-shell shell hide webtechsponge.plugin-sea
 status | jq -e '.opened==false' >/dev/null
 # A locally authored inert panel proves actual lifecycle transitions without
 # downloading or executing any third-party community implementation.
@@ -45,5 +45,5 @@ bin/oma-plug-sea-action remove "$id" --confirm-remove | jq -e '.ok==true and all
 trap - EXIT
 scripts/open-verified-runtime
 status | jq -e '.opened==true' >/dev/null
-omarchy-shell shell hide local.oma-plug-sea
+omarchy-shell shell hide webtechsponge.plugin-sea
 printf 'Real shell load/summon/hide and inert fixture enable/disable/remove passed.\n'
