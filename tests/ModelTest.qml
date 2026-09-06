@@ -34,6 +34,11 @@ Item {
             check(Catalog.filter(rows,"","All categories","All plugins","Recently listed")[0].id === "test.two","Date sort");
             check(Catalog.filter(rows,"","All categories","All plugins","Most stars")[0].id === "test.two", "Star sorting compares multiple candidates descending");
             check(Catalog.starCount({stars:-1}) === 0 && Catalog.starCount({stars:"12"}) === 0 && Catalog.starCount({stars:12.8}) === 12, "Star counts remain nonnegative integers");
+            var ordered = [{id:"b",name:"Beta",stars:9,listedAt:"2026-09-02"}, {id:"a",name:"Alpha",stars:2,listedAt:"2026-09-01"}];
+            ["Name", "Most stars", "Recently listed"].forEach(function(sort) {
+                check(Catalog.filter(ordered,"","All categories","All plugins",sort,"Ascending")[0].id === "a", sort + " ascending");
+                check(Catalog.filter(ordered,"","All categories","All plugins",sort,"Descending")[0].id === "b", sort + " descending");
+            });
             check(Catalog.categories(rows).join("|") === "All categories|Desktop|Local|Tools","Categories unique and sorted");
             check(!Catalog.safeLink("file:///etc/passwd") && !Catalog.safeLink("javascript:alert(1)") && Catalog.safeLink("https://github.com/test/repo"),"Only HTTPS links");
             var listed = {id:"test.source", repo:"https://github.com/Original/Plugin.git/", verificationStatus:"Verified"};

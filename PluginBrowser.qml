@@ -37,6 +37,7 @@ Item {
     property string category: "All categories"
     property string scope: "All plugins"
     property string sort: "Name"
+    property string sortDirection: "Ascending"
     property var categoryOptions: ["All categories"]
     property string fetchedAt: ""
     property bool stale: false
@@ -71,7 +72,7 @@ Item {
         }
         Qt.callLater(function() { if (root.previewSource && imageViewer.item) imageViewer.item.forceActiveFocus(); else if (root.detail) mainFocus.forceActiveFocus(); else search.forceActiveFocus(); });
     }
-    function status(arg) { return JSON.stringify({runtimeFingerprint:runtimeFingerprint, opened:opened, search:query, category:category, scope:scope, sort:sort, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
+    function status(arg) { return JSON.stringify({runtimeFingerprint:runtimeFingerprint, opened:opened, search:query, category:category, scope:scope, sort:sort, sortDirection:sortDirection, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
     function close() { previewSource = ""; opened = false; }
     function dismiss() {
         if (busy) { operationMessage = "Please wait for the current action to finish."; return; }
@@ -119,7 +120,7 @@ Item {
     function rebuild() {
         rows = Catalog.correlate(catalog, localPlugins);
         categoryOptions = Catalog.categories(rows);
-        filtered = Catalog.filter(rows, query, category, scope, sort);
+        filtered = Catalog.filter(rows, query, category, scope, sort, sortDirection);
         if (detail) {
             var id = detail.id;
             var match = rows.filter(function(p) { return p.id === id; });
@@ -159,6 +160,7 @@ Item {
     onCategoryChanged: rebuild()
     onScopeChanged: rebuild()
     onSortChanged: rebuild()
+    onSortDirectionChanged: rebuild()
     Timer { id: debounce; interval: 180; onTriggered: root.query = search.text }
     Timer {
         interval: 300000
@@ -330,7 +332,14 @@ Item {
                     RowLayout {
                         visible: !root.detail; Layout.fillWidth: true; spacing: 12
                         Ui.Dropdown { Layout.preferredWidth: 165; label: "State"; showLabel: false; value: root.scope; options: ["All plugins", "Installed", "Available"]; onChanged: function(value) { root.scope = value; } }
-                        Ui.Dropdown { Layout.preferredWidth: 205; label: "Sort"; showLabel: false; value: root.sort; options: [{value:"Name", label:"Sort: name"}, {value:"Most stars", label:"Stars: high to low"}, {value:"Recently listed", label:"Recently listed"}]; onChanged: function(value) { root.sort = value; } }
+                        Ui.Dropdown { Layout.preferredWidth: 175; label: "Sort"; showLabel: false; value: root.sort; options: [{value:"Name", label:"Sort: name"}, {value:"Most stars", label:"Sort: stars"}, {value:"Recently listed", label:"Sort: date"}]; onChanged: function(value) { root.sort = value; } }
+                        Ui.Button {
+                            text: root.sortDirection === "Ascending" ? "↑" : "↓"
+                            bordered: true; focusable: true
+                            Accessible.name: "Sort direction: " + root.sortDirection
+                            tooltipText: root.sortDirection + " order. Click to reverse."
+                            onClicked: root.sortDirection = root.sortDirection === "Ascending" ? "Descending" : "Ascending"
+                        }
                         Item { Layout.fillWidth: true }
                         Text { text: root.filtered.length + " plugins"; color: Color.foreground; opacity: 0.6; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }

@@ -46,7 +46,7 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 
 - Type to search; search is debounced and includes descriptions, IDs, tags and categories.
 - Use category/state/sort selectors; refresh preserves search and filter context. While open, the browser checks the catalog source every five minutes and highlights **Refresh available** when it detects a change. Checks do not replace the catalog until you refresh.
-- Cards show repository star counts; choose **Stars: high to low** in the sort dropdown to put the most-starred repositories first. Hover the star count for its meaning, or the availability and catalog labels for plain-language explanations.
+- Cards show repository star counts; choose **Sort: name**, **Sort: stars** or **Sort: date**, then use the separate **↑ / ↓** button for ascending or descending order. For the most-starred repositories first, choose stars and **↓**. Direction stays unchanged when switching sort fields. Hover the star count for its meaning, or the availability and catalog labels for plain-language explanations.
 - Down from search moves to cards; arrows navigate, Enter/Space open details. Click a card for the same view.
 - Tab moves between controls. Ctrl+F returns to search; F5 refreshes. Escape cancels consent, returns from details, clears search, then closes.
 - Details show source, preview or fallback, local version/state, upstream checks and exact review/observed commits when supplied.

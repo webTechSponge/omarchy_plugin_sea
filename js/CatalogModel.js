@@ -28,7 +28,7 @@ function categories(rows) {
     rows.forEach(function(p) { if (p.category) values[p.category] = true; });
     return ["All categories"].concat(Object.keys(values).sort());
 }
-function filter(rows, query, category, scope, sort) {
+function filter(rows, query, category, scope, sort, direction) {
     var words = query.toLowerCase().trim().split(/\s+/).filter(function(w) { return w; });
     var filtered = rows.filter(function(p) {
         var haystack = [p.name,p.description,p.author,p.id,p.category,(p.tags || []).join(" ")].join(" ").toLowerCase();
@@ -36,10 +36,13 @@ function filter(rows, query, category, scope, sort) {
             && (category === "All categories" || p.category === category)
             && (scope === "All plugins" || (scope === "Installed" && p.local) || (scope === "Available" && !p.local && p.installAvailable === true));
     });
+    // Keep the legacy default for callers without an explicit direction.
+    var sign = direction === "Ascending" ? 1 : direction === "Descending" ? -1 : sort === "Name" ? 1 : -1;
     filtered.sort(function(a,b) {
-        if (sort === "Most stars" && starCount(a) !== starCount(b)) return starCount(b) - starCount(a);
-        if (sort === "Recently listed" && a.listedAt !== b.listedAt) return String(b.listedAt || "").localeCompare(String(a.listedAt || ""));
-        return String(a.name || a.id).localeCompare(String(b.name || b.id));
+        if (sort === "Most stars" && starCount(a) !== starCount(b)) return sign * (starCount(a) - starCount(b));
+        if (sort === "Recently listed" && a.listedAt !== b.listedAt) return sign * String(a.listedAt || "").localeCompare(String(b.listedAt || ""));
+        var nameOrder = String(a.name || a.id).localeCompare(String(b.name || b.id));
+        return (sort === "Name" ? sign : 1) * (nameOrder || String(a.id).localeCompare(String(b.id)));
     });
     return filtered;
 }
