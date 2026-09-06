@@ -29,7 +29,7 @@ Completed on the installed Omarchy desktop: one 2560×1600 display at scale 2 (1
 
 The images below are actual captured browser surfaces, cropped at capture time so unrelated desktop content is excluded.
 
-![Current branded browser](screenshots/branded-browser.png)
+![Current branded browser](screenshots/browser-transparent-logo.png)
 
 [Compact browser](screenshots/branded-compact.png) · [Full consent](screenshots/consent.png) · [Compact scrollable consent](screenshots/compact-consent.png)
 
@@ -84,7 +84,7 @@ The approved PluginSea wordmark is rendered in the browse header, with a shorter
 
 `mise run check` passed. After the compact-height adjustment, QML static analysis and real keyboard smoke checks passed. Visual checks at 1120×748 and 620×480 confirmed readable branding, reachable controls and the detail-page icon. The shell was restarted to clear cached QML; its fresh logs contain no branding/image errors.
 
-[Branded browser](screenshots/branded-browser.png) · [Compact browser](screenshots/branded-compact.png) · [Detail icon](screenshots/branded-detail.png)
+[Branded browser](screenshots/browser-transparent-logo.png) · [Compact browser](screenshots/branded-compact.png) · [Detail icon](screenshots/branded-detail.png)
 
 ## Source review and documentation audit — 2026-09-06
 
