@@ -67,7 +67,11 @@ refresh) [[ $# -le 1 ]] || exit 2 ;;
 *) echo 'Usage: oma-plug-sea-catalog refresh|cached|check|normalize FILE' >&2; exit 2 ;;
 esac
 umask 077
-mkdir -p "$CACHE"
+[[ $CACHE == /* ]] || { fallback 'Cache directory unavailable.'; exit; }
+[[ ! -L $CACHE ]] || { fallback 'Cache directory unavailable.'; exit; }
+mkdir -p -- "$CACHE"
+[[ -d $CACHE && -O $CACHE ]] || { fallback 'Cache directory unavailable.'; exit; }
+chmod 700 -- "$CACHE"
 exec 9>"$CACHE/catalog.lock"
 if ! flock -n 9; then fallback 'Another catalog refresh is running.'; exit; fi
 raw=$(mktemp "$CACHE/.raw.XXXXXX")
@@ -82,6 +86,10 @@ if ! normalize "$raw" >"$normalized" 2>"$errors"; then
   fallback "Catalog data was rejected; saved catalog retained. $(head -c 1000 "$errors")"; exit
 fi
 digest=$(sha256sum "$raw"); digest=${digest%% *}
-jq --arg etag "$(header_value etag "$headers")" --arg modified "$(header_value last-modified "$headers")" --arg digest "$digest" '.sourceValidators={etag:$etag,lastModified:$modified} | .sourceHash=$digest' "$normalized" >"$raw"
+etag=$(header_value etag "$headers" | tr -d '\r\n')
+modified=$(header_value last-modified "$headers" | tr -d '\r\n')
+[[ $etag =~ ^[[:print:]]{1,512}$ ]] || etag=""
+[[ $modified =~ ^[[:print:]]{1,512}$ ]] || modified=""
+jq --arg etag "$etag" --arg modified "$modified" --arg digest "$digest" '.sourceValidators={etag:$etag,lastModified:$modified} | .sourceHash=$digest' "$normalized" >"$raw"
 mv -f -- "$raw" "$CACHE/catalog.json"
 cat "$CACHE/catalog.json"
