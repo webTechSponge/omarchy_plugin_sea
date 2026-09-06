@@ -9,6 +9,21 @@ CACHE="$CACHE_DIR/engagement.json"
 LOCK="$CACHE_DIR/engagement.lock"
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/oma_plug_sea
 HEARTED="$STATE_DIR/hearts.json"
+ensure_cache_dir() {
+  [[ $CACHE_DIR == /* ]] || return 1
+  [[ ! -L $CACHE_DIR ]] || return 1
+  mkdir -p -- "$CACHE_DIR" || return 1
+  [[ -d $CACHE_DIR && -O $CACHE_DIR ]] || return 1
+  chmod 700 -- "$CACHE_DIR" || return 1
+}
+ensure_state_dir() {
+  [[ $STATE_DIR == /* ]] || return 1
+  [[ ! -L $STATE_DIR ]] || return 1
+  mkdir -p -- "$STATE_DIR" || return 1
+  [[ -d $STATE_DIR && -O $STATE_DIR ]] || return 1
+  chmod 700 -- "$STATE_DIR" || return 1
+}
+cache_stub() { jq -n --arg source "$SOURCE" --arg error "$1" '{schemaVersion:1,ok:false,source:$source,fetchedAt:"",stale:true,error:$error,hearts:{}}'; }
 normalize() { jq -e --arg source "$SOURCE" --arg now "$(date -u +%FT%TZ)" -f "$ROOT/lib/engagement.jq" "$1"; }
 valid_cache() { [[ -f $CACHE ]] && jq -e '.schemaVersion==1 and (.hearts|type)=="object"' "$CACHE" >/dev/null 2>&1; }
 valid_id() { [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $1 != *..* ]]; }
@@ -19,7 +34,10 @@ fallback() {
 heart_envelope() { jq -n --argjson ok "$1" --arg id "$2" --argjson already "$3" --argjson recorded "$4" --argjson hearts "$5" --arg error "$6" '{ok:$ok,id:$id,already:$already,recorded:$recorded,hearts:$hearts,error:$error}'; }
 hearts_state() {
   umask 077
-  mkdir -p "$STATE_DIR"
+  if ! ensure_state_dir; then
+    jq -n --arg now "$(date -u +%FT%TZ)" '{ok:false,hearted:{},fetchedAt:$now,error:"Hearts state unavailable."}'
+    return
+  fi
   if [[ -f $HEARTED ]] && jq -e 'type=="object"' "$HEARTED" >/dev/null 2>&1; then
     jq --arg now "$(date -u +%FT%TZ)" '{ok:true,hearted:.,fetchedAt:$now}' "$HEARTED"
   else
@@ -28,7 +46,7 @@ hearts_state() {
 }
 record_hearted() {
   umask 077
-  mkdir -p "$STATE_DIR"
+  ensure_state_dir || return 1
   local tmp_state
   tmp_state=$(mktemp "$STATE_DIR/.hearts.XXXXXX")
   if [[ -f $HEARTED ]] && jq -e 'type=="object"' "$HEARTED" >/dev/null 2>&1; then
@@ -74,7 +92,7 @@ send_heart() {
         total=null
         t=$(jq -r '.plugin.hearts | if type=="number" and isfinite and .>=0 then floor else empty end' "$raw" 2>/dev/null || true)
         if [[ $t =~ ^[0-9]+$ ]]; then total=$t; fi
-        record_hearted "$id"
+        record_hearted "$id" || echo "warning: could not persist hearted flag for $id" >&2
         if [[ $total != null ]]; then bump_cache "$id" "$total"; fi
         heart_envelope true "$id" false true "$total" ""
       else
@@ -92,14 +110,30 @@ send_heart() {
 mode=refresh
 heart_id=""
 case ${1:-refresh} in
-cached) [[ $# == 1 ]] || exit 2; fallback "Showing the last saved engagement stats. Refresh to check for changes."; exit ;;
-hearts-state) [[ $# == 1 ]] || exit 2; hearts_state; exit ;;
+cached) [[ $# == 1 ]] || exit 2; mode=cached ;;
+hearts-state) [[ $# == 1 ]] || exit 2; mode=hearts-state ;;
 heart) [[ $# == 2 ]] || exit 2; mode=heart; heart_id=$2 ;;
 refresh) [[ $# -le 1 ]] || exit 2 ;;
 *) echo 'Usage: oma-plug-sea-engagement refresh|cached|heart ID|hearts-state' >&2; exit 2 ;;
 esac
 umask 077
-mkdir -p "$CACHE_DIR"
+if [[ $mode == cached ]]; then
+  if ensure_cache_dir; then fallback "Showing the last saved engagement stats. Refresh to check for changes."
+  else cache_stub 'Cache directory unavailable.'; fi
+  exit
+fi
+if [[ $mode == hearts-state ]]; then hearts_state; exit; fi
+# An untrusted cache directory must never be read: emit an empty stub rather
+# than the fallback, which would surface attacker-planted hearts as stale.
+if ! ensure_cache_dir; then
+  if [[ $mode == heart ]]; then heart_envelope false "$heart_id" false false null "Cache directory unavailable; the heart was not sent."
+  else cache_stub 'Cache directory unavailable.'; fi
+  exit
+fi
+if [[ $mode == heart ]] && ! ensure_state_dir; then
+  heart_envelope false "$heart_id" false false null "Hearts state unavailable; the heart was not sent."
+  exit
+fi
 exec 9>"$LOCK"
 if ! flock -n 9; then
   if [[ $mode == heart ]]; then

@@ -355,6 +355,27 @@ TEST_HEART_STATUS=200 TEST_HEART_FIXTURE="$tmp/heart-nototal" "$eng" heart test.
 assert "$tmp/out" '.ok==true and .hearts==null' 'recorded:true without total still succeeds'
 "$eng" hearts-state >"$tmp/out"
 assert "$tmp/out" '.ok==true and .hearted["test.one"]==true and .hearted["test.two"]==true and (.hearted|has("fresh.id")|not)' 'hearts-state lists hearted ids'
+mkdir -p "$tmp/eng-evil"
+printf '%s' '{"schemaVersion":1,"ok":true,"source":"planted","fetchedAt":"t","stale":false,"error":"","hearts":{"test.evil":999}}' >"$tmp/eng-evil/engagement.json"
+cp "$tmp/eng-evil/engagement.json" "$tmp/eng-planted"
+mv "$XDG_CACHE_HOME/oma_plug_sea" "$tmp/eng-real"
+ln -s "$tmp/eng-evil" "$XDG_CACHE_HOME/oma_plug_sea"
+"$eng" refresh >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.hearts|length)==0 and (.error|contains("Cache directory unavailable"))' 'symlinked engagement cache refused, planted hearts not surfaced'
+cmp "$tmp/eng-planted" "$tmp/eng-evil/engagement.json"
+"$eng" cached >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.hearts|length)==0 and (.error|contains("Cache directory unavailable"))' 'cached with unsafe dir returns empty stub'
+rm "$XDG_CACHE_HOME/oma_plug_sea"; mv "$tmp/eng-real" "$XDG_CACHE_HOME/oma_plug_sea"
+mv "$XDG_STATE_HOME/oma_plug_sea" "$tmp/hearts-real"
+ln -s "$tmp/hearts-evil" "$XDG_STATE_HOME/oma_plug_sea"
+"$eng" hearts-state >"$tmp/out"
+assert "$tmp/out" '.ok==false and (.error|contains("Hearts state unavailable"))' 'symlinked hearts state refused'
+: >"$TEST_ROOT/conditions"
+"$eng" heart evil.id >"$tmp/out"
+assert "$tmp/out" '.ok==false and .already==false and (.error|contains("Hearts state unavailable"))' 'heart with unsafe state not sent'
+[[ ! -s "$TEST_ROOT/conditions" && ! -e "$tmp/hearts-evil" ]] || { echo 'FAIL: unsafe-state heart touched network or disk' >&2; exit 1; }
+pass=$((pass+1))
+rm "$XDG_STATE_HOME/oma_plug_sea"; mv "$tmp/hearts-real" "$XDG_STATE_HOME/oma_plug_sea"
 exec 7>"$XDG_CACHE_HOME/oma_plug_sea/engagement.lock"
 flock -n 7
 "$eng" refresh >"$tmp/out"
