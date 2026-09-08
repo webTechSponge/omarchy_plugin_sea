@@ -102,6 +102,18 @@ Install & enable first installs disabled, verifies the expected ID and then enab
 
 The official signed registry API/client was not deployed at verification time. When a real signed client ships, the catalog adapter can migrate independently, while all signature, checksum, freshness, compatibility, receipt and revocation enforcement must remain owned by that client. Current code does not fabricate those guarantees.
 
+## Advisory AI source review
+
+On a plugin's detail page, choose **Review with AI**, read the source/access disclosure, then **Open read-only AI review**. This opens a terminal session asking the default agent to inspect vulnerabilities, unexpected calling-home, data exfiltration, destructive behavior and other hostile code. It is a source review, not an Omarchy validation or installation operation.
+
+This build supports **Codex when it is the configured Omarchy default agent**. It preserves Codex's user-configured model/provider without an override or fallback. Missing/unsupported defaults disable review with an explanation; reopen the browser after changing your default. The default is checked again before launch and inside the terminal, so a changed default is refused rather than silently selecting another agent.
+
+The review targets the public GitHub repository shown in consent. For installed plugins, that is the canonical installed origin, never a differing catalog repository; unknown/non-GitHub origins are unavailable. It is **not a review of your installed revision**. The prompt asks Codex to identify the exact commit, cite source evidence, distinguish observations from inference and disclose incomplete coverage. It forbids tests, builds, Omarchy checks, installation, cloning, archive extraction, repository scripts and plugin execution. Plugin Sea itself downloads no source for this action.
+
+Codex starts in a private empty temporary directory with `--sandbox read-only --ask-for-approval never --search`. The unsafe `omarchy agent` / `omarchy agent prompt` launcher is not used. **Read-only shell mode is not snapshot-only isolation:** Codex can read accessible user files, live web access is enabled, and configured integrations can have broader permissions. The prompt forbids private-file access and MCP use, but prompts are not security boundaries. Public source and the prompt may be sent to your configured provider and retained in Codex history.
+
+Results remain in the Codex terminal/session. They never change catalog verification, grant installation consent or authorize lifecycle operations. Stop/end the session in its terminal; closing Plugin Sea does not cancel it. This is an interactive advisory session without an automatic review deadline or result ingestion, not the unavailable fully isolated verification runner. A review that finds no issue is not a safety guarantee.
+
 ## Offline behavior
 
 The last good normalized catalog lives at `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/catalog.json`. Refresh uses 5-second connection and 25-second total timeouts and atomically replaces only a validated document. Malformed optional status values disable only the affected listing. Failed requests, malformed required entries and duplicate IDs preserve the good cache and return it with a visible stale indicator and refresh timestamp. Without any cache, the UI shows an honest empty/error state, retains local plugins, and offers Refresh. No fixture catalog is passed off as live data.

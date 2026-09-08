@@ -155,3 +155,28 @@ Implemented `docs/security-hardening-plan.md` via three parallel edit units plus
 - `tests/backend.sh` gains symlinked-manifest, symlinked-`.git`, symlinked-cache and CRLF-ETag cases; `tests/preview.sh` gains a symlinked-cache refusal case.
 
 `mise run check` passes, including 69 backend assertions (was 61), Qt model and preview suites, and managed integration checks. QML analysis passes with 140 existing advisory warnings.
+
+## Advisory default-agent source review — 2026-09-07
+
+Added a consented **Review with AI** detail action and `bin/oma-plug-sea-review`. It uses the configured default only when it is Codex, preserves user model/provider selection, and launches a read-only/no-escalation interactive session with live web access. The prompt requests static security review of the disclosed public GitHub repository, not local installed code. AI results are not consumed as verification or lifecycle authority. Consent explicitly distinguishes this from a fully isolated verification runner and discloses provider/history, filesystem and integration limits.
+
+Focused checks performed:
+
+- Inspected `codex --help` and installed Omarchy default-agent/terminal-launcher sources; no actual AI session was started.
+- `bash -n bin/oma-plug-sea-review` passed.
+- `bash tests/advisory-review.sh` passed using isolated HOME and offline doubles for Omarchy, the terminal and Codex. It covers unavailable defaults, missing consent, unsafe sources, exact read-only/no-escalation launch arguments with no model/provider override, a default change during terminal handoff, terminal/agent failures without fallback, and temporary-directory cleanup.
+- Qt6 `qmllint` on `PluginBrowser.qml` and `components/PluginDetails.qml`, with the installed shell import path, exited 0 with 72 advisory warnings.
+
+No Omarchy lifecycle tests, source downloads, repository setup scripts, dependency installation, desktop installation/reload, live AI requests, push or publication were performed. The live native UI and real Codex review session were not exercised; checks establish the launch boundary and QML static validity, not a runtime sandbox guarantee or provider/source availability. The existing installed copy was not replaced. Listing screenshots were not refreshed.
+
+### Resumed desktop verification — 2026-09-09
+
+- Corrected `tests/advisory-review.sh` to separate successful terminal launch from later session execution. The terminal double records the handoff and returns before the session runs; a default change during that gap prevents Codex execution. A failing session is checked separately for a nonzero exit, no fallback and temporary-directory cleanup.
+- `bash tests/advisory-review.sh` and `bash tests/model.sh` passed. `scripts/qml-check` passed across the project with 163 advisory host/dynamic-type warnings. The full lifecycle/backend suite was not rerun for this advisory-only change.
+- Rechecked the active Omarchy default-agent and terminal-launcher sources and `codex --help`. The real `capabilities` command reported configured Codex available; no model/provider configuration was read or changed.
+- `mise run install` replaced the owned development copy using its timestamped backup workflow. `scripts/verify-runtime` confirmed checkout, installed files and live QML identity `47c01e68e22edbe309bae8cf4547fe09b13627f735177260472a32d95fdb7881`.
+- `scripts/keyboard-smoke` passed search, card navigation, detail opening, empty-state and Escape checks. Its first run was interrupted by a concurrent Omarchy update restarting the shell; it passed after reopening the current runtime.
+- Visually inspected the native detail action and advisory consent at 1120×748 and 620×480. Invoked the real `requestAction("review")` handler through supported shell call IPC; confirmed consent identifies the selected plugin, canonical public source and Codex configuration policy. Escape cleared consent and preserved the selected detail at both sizes. No acceptance button was activated.
+- Active shell logs contained no Plugin Sea errors. A host-portal registration warning was present and is not an advisory-review result.
+
+No live AI session, provider request, third-party plugin installation or publication was performed. The real terminal-to-Codex handoff and source-review quality remain unexercised; the offline regression covers that command boundary, not a runtime isolation guarantee. The development copy is current and the overlay was left closed. Listing screenshots remain unchanged.

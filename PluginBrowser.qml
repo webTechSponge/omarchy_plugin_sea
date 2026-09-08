@@ -66,11 +66,19 @@ Item {
     property string pendingAction: ""
     property var pendingPlugin: null
     property bool actionPending: false
+    property bool reviewChecking: false
+    property bool reviewAvailable: false
+    property string reviewAgent: ""
+    property string reviewError: "Open the browser to check the default AI agent."
+    property string reviewNotice: ""
+    property string pendingReviewAgent: ""
+    property bool reviewPending: false
     readonly property bool busy: actionProcess.running || actionPending || heartProcess.running || heartPending
     readonly property string helperDir: decodeURIComponent(Qt.resolvedUrl("bin/").toString().replace(/^file:\/\//, ""))
     function open(payload) {
         try { var options = JSON.parse(payload || "{}"); requestedWidth = Math.max(620, Math.min(1600, Number(options.width) || 1120)); requestedHeight = Math.max(480, Math.min(1200, Number(options.height) || 820)); } catch (e) {}
         opened = true;
+        checkReviewAgent();
         if (catalog.length || fetchedAt) {
             checkCatalog();
             engagementProcess.running = true;
@@ -109,6 +117,23 @@ Item {
         try { return JSON.parse(output); }
         catch (e) { return {ok:false, error:fallback, plugins:[]}; }
     }
+    function checkReviewAgent() {
+        if (reviewChecking) return;
+        reviewChecking = true;
+        reviewAvailable = false;
+        reviewError = "Checking the default AI agent…";
+        reviewCapabilityProcess.running = true;
+    }
+    function runReview(plugin) {
+        if (reviewPending || !plugin || pendingAction !== "review") return;
+        var source = Catalog.canonicalGitHub(Catalog.sourceUrl(plugin));
+        if (!source || pendingReviewAgent !== "codex") return;
+        reviewPending = true;
+        pendingAction = "";
+        reviewNotice = "AI review terminal requested. Read results and stop the session in that terminal; closing this browser does not cancel it.";
+        reviewProcess.command = [helperDir + "oma-plug-sea-review", "launch", plugin.id, source, pendingReviewAgent, "--consent-advisory-review"];
+        reviewProcess.running = true;
+    }
     // Checks never replace the visible model. An explicit refresh waits for an
     // in-flight check; generation changes prevent its old result from winning.
     function pollCatalog(arg) { checkCatalog(); return checking ? "checking" : "idle"; }
@@ -142,6 +167,10 @@ Item {
     }
     function requestAction(action) {
         if (busy || refreshing || checking || !detail) return;
+        if (action === "review") {
+            if (!reviewAvailable || reviewChecking || reviewPending || !Catalog.canonicalGitHub(Catalog.sourceUrl(detail))) return;
+            pendingReviewAgent = reviewAgent;
+        }
         if (action === "disable") { runAction(action, detail); return; }
         pendingPlugin = JSON.parse(JSON.stringify(detail));
         pendingAction = action;
@@ -150,6 +179,7 @@ Item {
     function consentText() {
         if (!pendingPlugin) return "";
         var p = pendingPlugin;
+        if (pendingAction === "review") return "Plugin ID: " + p.id + "\nPublic repository: " + Catalog.canonicalGitHub(Catalog.sourceUrl(p)) + "\nAgent: " + pendingReviewAgent + "\nModel/provider: resolved by Codex from your user configuration; Plugin Sea supplies no override or fallback.\n\nOpen an advisory source review in your default terminal? The prompt asks for vulnerabilities, unexpected calling-home, data exfiltration and hostile behavior. No Omarchy checks, tests, installations or plugin execution are requested. This reviews the remote repository, not your installed revision; Codex is asked to identify the exact commit and any gaps in source access.\n\nPublic source and the prompt may be sent to your configured AI provider and retained in Codex history. Live web access is enabled. Codex starts in an empty working directory with a read-only shell sandbox and no approval escalation. This is NOT snapshot-only isolation: Codex can still read accessible user files, and configured integrations may have broader permissions. The prompt forbids private-file access and MCP use, but these instructions are not an enforced security boundary.\n\nResults remain in the terminal and never authorize installation or change catalog verification. Review is advisory, not a safety guarantee. Stop/end the session in that terminal; closing Plugin Sea does not cancel it.";
         if (pendingAction === "remove") return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
         if (pendingAction === "heart") return "Send an anonymous heart for " + p.name + " (" + p.id + ") to the marketplace? The request is reported to the marketplace as an anonymous heart from the plugins.omarchy.org origin; the marketplace rate-limits hearts and records no account or identity alongside the heart.";
         return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
@@ -313,6 +343,36 @@ Item {
             Qt.callLater(function() {
             var result = root.parseResult(heartedOutput.text, "");
             if (result.ok && code === 0 && result.hearted) root.hearted = result.hearted;
+            });
+        }
+    }
+    Process {
+        id: reviewCapabilityProcess
+        command: [root.helperDir + "oma-plug-sea-review", "capabilities"]
+        stdout: StdioCollector { id: reviewCapabilityOutput; waitForEnd: true }
+        stderr: StdioCollector { waitForEnd: true }
+        onExited: function(code) {
+            Qt.callLater(function() {
+                var result = root.parseResult(reviewCapabilityOutput.text, "Could not inspect the default AI agent.");
+                root.reviewAvailable = code === 0 && !!result && result.ok === true && result.available === true && result.agent === "codex";
+                root.reviewAgent = root.reviewAvailable ? result.agent : "";
+                root.reviewError = root.reviewAvailable ? "" : result && typeof result.error === "string" && result.error ? result.error : "The default AI agent could not be confirmed.";
+                root.reviewChecking = false;
+            });
+        }
+    }
+    Process {
+        id: reviewProcess
+        stdout: StdioCollector { id: reviewOutput; waitForEnd: true }
+        stderr: StdioCollector { waitForEnd: true }
+        onExited: function(code) {
+            Qt.callLater(function() {
+                var result = root.parseResult(reviewOutput.text, "The review terminal launcher failed.");
+                root.reviewNotice = code === 0 && !!result && result.ok === true
+                    ? "AI review terminal launcher finished. Results belong to the Codex session, not Plugin Sea; no verification badge or installation change was made."
+                    : "AI review could not be launched: " + (result && typeof result.error === "string" ? result.error : "Unknown launcher error.");
+                root.reviewPending = false;
+                root.checkReviewAgent();
             });
         }
     }
@@ -514,6 +574,8 @@ Item {
                         id: pluginDetails; visible: !!root.detail; Layout.fillWidth: true; Layout.fillHeight: true
                         plugin: root.detail || ({}); busy: root.busy || root.refreshing || root.checking || !!root.localError
                         hearted: !!root.detail && !!root.hearted[root.detail.id]
+                        reviewAvailable: root.reviewAvailable && !root.reviewChecking && !root.reviewPending
+                        reviewMessage: root.reviewPending ? root.reviewNotice : root.reviewError || root.reviewNotice
                         onActionRequested: function(action) { root.requestAction(action); }
                         onPreviewRequested: function(source) { root.showPreview(source); }
                     }
@@ -540,7 +602,7 @@ Item {
                 MouseArea { anchors.fill: parent; onClicked: {} }
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 32; spacing: 18
-                    Text { text: root.diagnosticVisible ? "Action diagnostics" : root.pendingAction === "remove" ? "Confirm removal" : "Review and consent"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
+                    Text { text: root.diagnosticVisible ? "Action diagnostics" : root.pendingAction === "review" ? "Advisory AI review" : root.pendingAction === "remove" ? "Confirm removal" : "Review and consent"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
                     Controls.ScrollView {
                         Layout.fillWidth: true; Layout.fillHeight: true; clip: true; contentWidth: availableWidth
                         TextEdit { width: parent.width; text: root.diagnosticVisible ? root.diagnostics : root.consentText(); textFormat: TextEdit.PlainText; readOnly: true; selectByMouse: true; wrapMode: TextEdit.Wrap; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading }
@@ -549,7 +611,7 @@ Item {
                         Layout.fillWidth: true
                         Item { Layout.fillWidth: true }
                         Ui.Button { id: cancelButton; text: root.diagnosticVisible ? "Close" : "Cancel"; bordered: true; focusable: true; onClicked: root.cancelModal(); Keys.onEscapePressed: root.cancelModal() }
-                        Ui.Button { visible: !root.diagnosticVisible; text: root.pendingAction === "install" ? "Accept · install disabled" : root.pendingAction === "remove" ? "Remove plugin" : root.pendingAction === "heart" ? "Send heart" : "Accept · " + root.pendingAction; bordered: true; focusable: true; onClicked: root.pendingAction === "heart" ? root.runHeart(root.pendingPlugin) : root.runAction(root.pendingAction, root.pendingPlugin); Keys.onEscapePressed: root.cancelModal() }
+                        Ui.Button { visible: !root.diagnosticVisible; text: root.pendingAction === "review" ? "Open read-only AI review" : root.pendingAction === "install" ? "Accept · install disabled" : root.pendingAction === "remove" ? "Remove plugin" : root.pendingAction === "heart" ? "Send heart" : "Accept · " + root.pendingAction; bordered: true; focusable: true; onClicked: root.pendingAction === "review" ? root.runReview(root.pendingPlugin) : root.pendingAction === "heart" ? root.runHeart(root.pendingPlugin) : root.runAction(root.pendingAction, root.pendingPlugin); Keys.onEscapePressed: root.cancelModal() }
                     }
                 }
             }
