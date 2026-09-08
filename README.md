@@ -128,9 +128,11 @@ git diff --check
 
 Desktop tests require the managed development installation; they are not intended to run against a standard Git installation. They first compare the checkout, installed files and a fingerprint reported by the running app. A mismatch fails the test and asks you to reinstall; a stale shell instance must be reopened or restarted. Each installed build uses its own runtime path so QML imports cannot be reused from another build.
 
+Standard Git installations clone the full repository, not just the runtime files. Do not commit automatically loaded agent instruction files such as `AGENTS.md`, including in subdirectories: they would become ambient instructions for agents working in an installed plugin. Keep agent-specific contributor guidance outside this repository under a filename agents do not automatically load. The real Git installation regression checks the installed tree for common auto-loaded instruction filenames.
+
 The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, enables, disables and removes it through the real helper/CLI, and verifies each postcondition. It never installs arbitrary third-party code. Development integration tests use isolated HOME and mocked CLI state. The standard-install regression uses the real Omarchy add/validate/catalog commands with a temporary local Git repository, while mocking shell IPC and the preview download. Another source-only test covers automatic compilation, concurrent cache reuse, source updates and failed-build recovery without mise. Backend tests exercise malformed/partial data, invalid URLs/IDs, stale cache, network and subprocess failures, concurrency, consent, source mismatches and false-success rejection. Model tests execute the actual JavaScript through Qt6.
 
-[Architecture and helper schema](docs/architecture.md) · [Verification evidence](docs/verification.md) · [Contributor instructions](AGENTS.md)
+[Architecture and helper schema](docs/architecture.md) · [Verification evidence](docs/verification.md)
 
 ## Troubleshooting
 

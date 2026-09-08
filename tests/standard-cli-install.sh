@@ -12,13 +12,16 @@ trap 'rm -rf -- "$tmp"' EXIT
 source_repo=$tmp/source
 isolated_home=$tmp/home
 mock_bin=$tmp/mock
-mkdir -p "$source_repo/lib" "$source_repo/scripts" "$source_repo/assets/branding" "$isolated_home" "$mock_bin" "$tmp/empty-template"
-# Include actual current runtime source, including newly added untracked helpers.
-cp -- "$root/manifest.json" "$root/PluginBrowser.qml" "$root/README.md" "$root/LICENSE" "$source_repo/"
-cp -a -- "$root/components" "$root/js" "$root/bin" "$source_repo/"
-cp -- "$root/lib/preview-decode.cpp" "$root/lib/normalize.jq" "$source_repo/lib/"
-cp -- "$root/scripts/build-preview" "$source_repo/scripts/"
-cp -- "$root/assets/branding/wordmark-pluginsea-v4.png" "$root/assets/branding/icon-pluginsea-v4.png" "$source_repo/assets/branding/"
+mkdir -p "$source_repo" "$isolated_home" "$mock_bin" "$tmp/empty-template"
+# Install the whole distributable tree, not a runtime allowlist that hides unsafe
+# repository extras. Include untracked additions, omit deletions and local ignores.
+git -C "$root" ls-files --cached --others --exclude-standard -z > "$tmp/source-files"
+while IFS= read -r -d '' file; do
+  [[ -e $root/$file || -L $root/$file ]] || continue
+  mkdir -p -- "$source_repo/$(dirname -- "$file")"
+  cp -a -- "$root/$file" "$source_repo/$file"
+done < "$tmp/source-files"
+[[ ! -e $source_repo/PROMPT.md ]] || { echo 'Local execution brief leaked into source fixture.' >&2; exit 1; }
 [[ ! -e $source_repo/lib/preview-decode ]] || { echo 'Generated decoder leaked into source fixture.' >&2; exit 1; }
 cat > "$mock_bin/omarchy-shell" <<'MOCK'
 #!/usr/bin/env bash
@@ -63,6 +66,16 @@ run_isolated "$platform/bin/omarchy" plugin catalog | jq -e --arg dir "$installe
 [[ ! -e $isolated_home/.config/omarchy/shell.json && ! -e $isolated_home/.config/omarchy/extensions/omarchy-menu.jsonc ]]
 [[ -z $(run_isolated git -C "$installed" status --porcelain) ]]
 printf 'PASS: real Omarchy add clones and validates an unbuilt plugin, disabled, without config hooks\n'
+run_isolated git -C "$installed" ls-files -z > "$tmp/installed-files"
+while IFS= read -r -d '' file; do
+  case ${file##*/} in
+    AGENTS.md|AGENTS.override.md|CLAUDE.md|CLAUDE.local.md|GEMINI.md)
+      printf 'Auto-loaded agent instructions leaked into installed plugin: %s\n' "$file" >&2
+      exit 1
+      ;;
+  esac
+done < "$tmp/installed-files"
+printf 'PASS: installed repository excludes auto-loaded agent instruction files\n'
 
 read -r -a qt_flags <<<"$(pkg-config --cflags --libs Qt6Gui libwebpmux libwebp)"
 c++ -std=c++17 -O2 "$root/tests/preview-fixture.cpp" -o "$tmp/fixture" "${qt_flags[@]}"

@@ -155,3 +155,13 @@ Implemented `docs/security-hardening-plan.md` via three parallel edit units plus
 - `tests/backend.sh` gains symlinked-manifest, symlinked-`.git`, symlinked-cache and CRLF-ETag cases; `tests/preview.sh` gains a symlinked-cache refusal case.
 
 `mise run check` passes, including 69 backend assertions (was 61), Qt model and preview suites, and managed integration checks. QML analysis passes with 140 existing advisory warnings.
+
+## Marketplace agent-context finding — 2026-09-09
+
+Removed the root `AGENTS.md` and its README link rather than relocating agent instructions within the installable repository. Standard Git installation clones the whole tree, so the development installer's runtime-only copy does not protect marketplace users. Existing README and architecture documentation retain the product, development and safety requirements; the ignored local `PROMPT.md` remains excluded from distribution.
+
+The real Git installation regression now builds its disposable repository from current tracked files and non-ignored additions, omitting deleted files, instead of a runtime allowlist that concealed repository extras. It rejects common auto-loaded agent instruction filenames at any depth in the installed checkout and refuses to distribute the local execution brief or generated decoder.
+
+Verification: `bash -n tests/standard-cli-install.sh`, `bash tests/standard-cli-install.sh`, and `omarchy plugin validate .` passed. The regression exercised real Omarchy add/validate/catalog in an isolated HOME, checked the installed tree, and compiled the native decoder and decoded a preview fixture. Shell IPC and preview download were mocked; no user desktop installation was changed.
+
+This is local remediation, not marketplace revalidation or a full security review. After publishing a new commit, resubmit and validate that revision; the marketplace validation, decoded security baseline and current default-branch HEAD must all match its full SHA. The previously validated `6a56a20e112acf70a8d66e8164c1676145f04c7f` does not cover this fix. The deferred catalog/install/enable, cache/compiler, preview/network, engagement, URL and filesystem review remains outstanding.
