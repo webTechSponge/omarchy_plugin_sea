@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Shell discovery is authoritative for enabled/active state. Read manifests only as metadata.
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$ROOT/lib/git-provenance.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 if ! timeout 12 omarchy plugin list --json >"$tmp/local" 2>"$tmp/errors" || ! jq -e 'type=="array" and all(.[]; (.id|type)=="string" and (.enabled|type)=="boolean")' "$tmp/local" >/dev/null 2>&1; then
@@ -13,11 +15,18 @@ while IFS= read -r id; do
   [[ ! -L $path && ! -L $path/manifest.json && ! -L $path/.git ]] || continue
   [[ -f $path/manifest.json ]] || continue
   git_managed=false
-  repo=""
-  if [[ -d $path/.git && ! -L $path ]]; then
+  repo="" sea_head="" sea_detached=false sea_clean=false
+  if [[ -d $path/.git ]] && sea_safe_path "$path/.git"; then
     git_managed=true
-    repo=$(git -C "$path" config --get remote.origin.url 2>/dev/null || true)
+    if [[ -f $path/.git/config && ! -L $path/.git/config ]]; then
+      repo=$(sea_git config --file "$path/.git/config" --no-includes --get-all remote.origin.url 2>/dev/null || true)
+    fi
+    if sea_observe "$path" 2>/dev/null; then
+      repo=$sea_repo
+    else
+      sea_head="" sea_detached=false sea_clean=false
+    fi
   fi
-  jq -c --arg id "$id" --arg path "$path" --arg repo "$repo" --argjson gitManaged "$git_managed" '{id:$id,version:(.version//""),description:(.description//""),repo:$repo,gitManaged:$gitManaged,localPath:$path,defaultSection:(.barWidget.defaultSection//"center")}' "$path/manifest.json" >>"$tmp/metadata" 2>/dev/null || true
+  jq -c --arg id "$id" --arg path "$path" --arg repo "$repo" --arg headCommit "$sea_head" --argjson detached "$sea_detached" --argjson clean "$sea_clean" --argjson gitManaged "$git_managed" '{id:$id,version:(.version//""),description:(.description//""),repo:$repo,gitManaged:$gitManaged,headCommit:$headCommit,detached:$detached,clean:$clean,localPath:$path,defaultSection:(.barWidget.defaultSection//"center")}' "$path/manifest.json" >>"$tmp/metadata" 2>/dev/null || true
 done < <(jq -r '.[].id' "$tmp/local")
-jq -n --slurpfile local "$tmp/local" --slurpfile meta "$tmp/metadata" '{ok:true,error:"",plugins:[$local[0][] | . as $p | ({version:"",repo:"",gitManaged:false,localPath:"",defaultSection:"center"} + . + ([$meta[]|select(.id==$p.id)][0]//{}))]}'
+jq -n --slurpfile local "$tmp/local" --slurpfile meta "$tmp/metadata" '{ok:true,error:"",plugins:[$local[0][] | . as $p | ({version:"",repo:"",gitManaged:false,headCommit:"",detached:false,clean:false,localPath:"",defaultSection:"center"} + . + ([$meta[]|select(.id==$p.id)][0]//{}))]}'

@@ -165,3 +165,34 @@ The real Git installation regression now builds its disposable repository from c
 Verification: `bash -n tests/standard-cli-install.sh`, `bash tests/standard-cli-install.sh`, and `omarchy plugin validate .` passed. The regression exercised real Omarchy add/validate/catalog in an isolated HOME, checked the installed tree, and compiled the native decoder and decoded a preview fixture. Shell IPC and preview download were mocked; no user desktop installation was changed.
 
 This is local remediation, not marketplace revalidation or a full security review. After publishing a new commit, resubmit and validate that revision; the marketplace validation, decoded security baseline and current default-branch HEAD must all match its full SHA. The previously validated `6a56a20e112acf70a8d66e8164c1676145f04c7f` does not cover this fix. The deferred catalog/install/enable, cache/compiler, preview/network, engagement, URL and filesystem review remains outstanding.
+
+## Immutable snapshot installation — 2026-10-04
+
+Implemented the local remediation for [marketplace submission #5215](https://github.com/omacom/omarchy-plugin-marketplace/issues/5215) and its [unpinned-install/update review](https://github.com/omacom/omarchy-plugin-marketplace/issues/5215#issuecomment-5672438941). Community installation now binds consent to ID, canonical HTTPS repository and full reviewed SHA, fetches/checks out only that object detached in private hidden staging, statically validates it with Omarchy, and atomically publishes without overwrite or copy fallback. Both community enable paths recheck fresh eligible snapshot evidence, origin, detached HEAD, object integrity and literal clean contents. Mutable in-app update execution and UI callers are removed.
+
+The live catalog's verified snapshot value is `verified`; `verificationCommit` must equal `listingValidatedCommit`. Root layout and manifest location are required. A newer observed upstream commit is not installed automatically. Unsigned catalog metadata remains unsigned, community code remains unsandboxed, and the application lock does not prevent arbitrary same-user modifications between checks and activation.
+
+### Checks observed
+
+- `scripts/check` passed: 64 backend behavior/security assertions, actual Qt6 model/provenance tests, initially 58 real-Git pinned-install assertions, preview boundary/decoder suites, actual platform self-install/native lazy-build regression, and managed-install ownership/fingerprint/integration checks. Qt6 analysis passed with 168 advisory host/dynamic-type warnings.
+- Live smoke exposed an overbroad collision guard: an unrelated existing development symlink blocked all installation. Collision inspection now uses Omarchy's static catalog, leaving unrelated symlinks untouched while detecting duplicate IDs. The expanded `bash tests/pinned-install.sh` passed 60 assertions after that correction.
+- `scripts/qml-check` passed again after the final external-guidance adjustment, with 168 advisory warnings.
+- The managed runtime was installed with recoverable backups. `scripts/smoke-test` passed real summon/hide, local-only enable refusal, explicit external enable of an authored inert panel, then in-app disable/remove. `scripts/keyboard-smoke` passed search/arrows/Enter/details/Escape/empty-state interactions.
+- The current runtime was verified with fingerprint `0ef0cdf00b056f54aad2a6f40807fc83cfb820c1fbf6a753bab3edbcf134a10b`.
+
+### Real pinned lifecycle smoke
+
+A throwaway locally authored Git repository contained reviewed A (`ac44bd739880c64cdc4f40ac287de9a21d663fc1`) and different upstream HEAD B (`7cbc64950a3f6e91cb159073484ed50411878384`). Only catalog download and Git network transport were substituted with that controlled fixture; Omarchy validation, discovery, rescan, enable, disable, removal and actual QML loading used the real running desktop shell.
+
+The production action helper installed A detached and confirmed it disabled. Standalone enable succeeded, and the loaded inert panel's `revision` function returned `A`, never B. After disable and a tracked entrypoint modification, re-enable returned `ok:false` with the plugin still disabled. Production removal returned `ok:true` with no remaining discovered fixture. Temporary repositories, transport wrappers, pointer client and screenshots were removed; no arbitrary third-party plugin was enabled.
+
+The permanent pinned regression uses real Git/validator/catalog but simulates network transport and shell enable state. It covers exact A versus B, identity/revision/content changes, untracked/ignored files, executable config, user-index flags, writable tracked files, stale/changed/missing evidence, exact-object fetch failure, unsafe paths/locks, dormant configuration, existing/concurrent destinations, development symlinks/duplicate IDs, retained post-publication failures and obsolete update refusal. Its simulated-shell limit is supplemented by the real-shell smoke above.
+
+### Actual UI inspection
+
+At 1120×748 logical size, the Overview install consent visibly named exact SHA `b09c227ba43182bebf101e5882147029fdddf7f1`, canonical repository, disabled-install choice, and unsigned/unsandboxed boundary; consent was cancelled without installing it. Lacuna's unsupported suite listing exposed its refusal and no install controls. The disabled authored Git fixture showed a disabled Enable button, actual installed SHA/detached/dirty state, no update button, and scrollable external-update guidance including disable-first/live-reload risk. A direct obsolete UI update request produced an unsupported-action message without opening consent or mutating code.
+
+### Publication status
+
+These are local implementation and runtime checks, not marketplace approval. Verification did not push code, apply approval labels, or create a new submission. Keep the finalized commit's full SHA/default-branch HEAD frozen, open a new submission referencing #5215, and obtain fresh matching validation and decoded security-baseline SHAs before requesting the current `approved-and-verified` review/publication path.
+

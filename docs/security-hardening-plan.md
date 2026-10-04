@@ -1,8 +1,6 @@
 # Security hardening plan — findings 2–5
 
-Source: security + integrity review (2026-09-06). Finding 1 (origin-check TOCTOU
-vs. external Git config) is inherent to the upstream CLI and already documented
-in `bin/oma-plug-sea-action` and consent text; no code change planned here.
+Source: security + integrity review (2026-09-06). This is the historical plan for findings 2–5. Its mutable CLI source/update boundary was superseded by the exact-snapshot implementation described in [architecture](architecture.md) and [the immutable installation plan](immutable-install-plan.md); same-user external filesystem races remain a documented limit.
 
 ## Fix 2 — installed-source link must be GitHub-canonical or disabled
 

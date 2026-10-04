@@ -4,6 +4,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 export HOME="$tmp/home" XDG_CACHE_HOME="$tmp/cache" XDG_STATE_HOME="$tmp/state"
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 export TEST_ROOT="$tmp" TEST_FIXTURE="$ROOT/fixtures/catalog.json" TEST_ENGAGEMENT_FIXTURE="$ROOT/fixtures/engagement.json"
 export TEST_REAL_GIT=$(command -v git)
 mkdir -p "$tmp/mock" "$HOME/.config/omarchy/plugins"
@@ -51,22 +52,6 @@ printf '%s\n' "$*" >>"$TEST_ROOT/ipc"
 [[ ${TEST_SHELL_FAIL:-0} == 0 ]] || exit 1
 echo ok
 MOCK
-cat >"$tmp/mock/git" <<'MOCK'
-#!/usr/bin/env bash
-if [[ $1 == ls-remote && $2 == --get-url ]]; then
- if [[ ${TEST_REAL_URL_RESOLUTION:-0} == 1 ]]; then exec "$TEST_REAL_GIT" "$@"; fi
- printf '%s\n' "${TEST_INSTALL_EFFECTIVE_SOURCE:-${@: -1}}"; exit
-fi
-if [[ $3 == config ]]; then echo "${TEST_GIT_ORIGIN:-https://github.com/test/weather}"; exit; fi
-if [[ $3 == remote && $4 == get-url ]]; then
- printf '%s\n' "${TEST_EFFECTIVE_ORIGIN:-${TEST_GIT_ORIGIN:-https://github.com/test/weather}}"; exit
-fi
-if [[ $3 == rev-parse ]]; then
- if [[ $4 == FETCH_HEAD && ${TEST_REV_MISMATCH:-0} == 1 ]]; then echo different; else echo verified-revision; fi
- exit
-fi
-exit 1
-MOCK
 cat >"$tmp/mock/omarchy" <<'MOCK'
 #!/usr/bin/env bash
 set -eu
@@ -76,30 +61,7 @@ if [[ $1 == list ]]; then
  [[ ${TEST_LOCAL_FAIL:-0} == 0 ]] || { echo 'shell stopped' >&2; exit 1; }
  cat "$TEST_ROOT/local.json"; exit
 fi
-printf '%s\n' "$@" >>"$TEST_ROOT/argv"
-[[ ${TEST_ACTION_FAIL:-0} == 0 ]] || { echo 'simulated Git/validation failure' >&2; exit 9; }
-sleep "${TEST_ACTION_DELAY:-0}"
-action=$1; id=${2:-}
-[[ ${TEST_FALSE_SUCCESS:-0} == 0 ]] || exit 0
-case $action in
-add)
- id=${TEST_INSTALL_ID:-test.weather}
- mkdir -p "$HOME/.config/omarchy/plugins/$id/.git"
- printf '{"id":"%s","version":"1.0","barWidget":{"defaultSection":"right"}}' "$id" >"$HOME/.config/omarchy/plugins/$id/manifest.json"
- jq --arg id "$id" '.+[{id:$id,name:"Weather",enabled:false,active:false,firstParty:false,canDisable:true,kinds:["bar-widget"]}]' "$TEST_ROOT/local.json" >"$TEST_ROOT/new.json"
- ;;
-enable|disable)
- jq --arg id "$id" --argjson enabled "$([[ $action == enable ]] && echo true || echo false)" 'map(if .id==$id then .enabled=$enabled else . end)' "$TEST_ROOT/local.json" >"$TEST_ROOT/new.json"
- ;;
-remove)
- rm -rf -- "$HOME/.config/omarchy/plugins/$id"
- jq --arg id "$id" 'map(select(.id!=$id))' "$TEST_ROOT/local.json" >"$TEST_ROOT/new.json"
- ;;
-update) cp "$TEST_ROOT/local.json" "$TEST_ROOT/new.json" ;;
-*) exit 2 ;;
-esac
-mv "$TEST_ROOT/new.json" "$TEST_ROOT/local.json"
-echo "mock action $action completed"
+exit 2
 MOCK
 chmod +x "$tmp/mock/"*
 printf '[]' >"$tmp/local.json"
@@ -108,7 +70,6 @@ pass=0
 assert() { if ! jq -e "$2" "$1" >/dev/null; then echo "FAIL: $3" >&2; cat "$1" >&2; exit 1; fi; pass=$((pass+1)); }
 cat_helper="$ROOT/bin/oma-plug-sea-catalog"
 local_helper="$ROOT/bin/oma-plug-sea-local"
-act="$ROOT/bin/oma-plug-sea-action"
 "$cat_helper" refresh >"$tmp/out"
 assert "$tmp/out" '.ok and (.stale|not) and (.plugins|length)==3' 'real-schema fixture normalization'
 assert "$tmp/out" '.sourceValidators.etag=="\"fixture-v1\"" and .sourceValidators.lastModified=="Sat, 05 Sep 2026 19:02:32 GMT" and (.sourceHash|length)==64' 'refresh persists HTTP validators and content digest'
@@ -192,105 +153,13 @@ for bad_status in 7 true false '{}' '[]'; do
   assert "$tmp/out" '.ok and (.plugins|length)==3 and (.plugins[0] | .installAvailable==false and .status=="" and (.installNote|contains("invalid type")))' "invalid status $bad_status safely disables listing"
 done
 for status in null '"active"'; do
-  jq --argjson status "$status" '.plugins[0].status=$status | .plugins[0].installAvailable=true' "$TEST_FIXTURE" >"$tmp/status.json"
+  jq --argjson status "$status" '.plugins[0] |= (. + {status:$status,installAvailable:true,repo:"https://github.com/test/weather",upstreamAvailable:true,verificationSnapshotStatus:"verified",verificationCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",listingValidatedCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",repositoryLayout:"root-plugin",manifestPath:"manifest.json"})' "$TEST_FIXTURE" >"$tmp/status.json"
   "$cat_helper" normalize "$tmp/status.json" >"$tmp/out"
   assert "$tmp/out" '.ok and .plugins[0].installAvailable' "supported status $status preserves listing availability"
 done
-jq 'del(.plugins[0].status) | .plugins[0].installAvailable=true' "$TEST_FIXTURE" >"$tmp/status.json"
+jq '.plugins[0] |= (. + {installAvailable:true,repo:"https://github.com/test/weather",upstreamAvailable:true,verificationSnapshotStatus:"verified",verificationCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",listingValidatedCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",repositoryLayout:"root-plugin",manifestPath:"manifest.json"} | del(.status))' "$TEST_FIXTURE" >"$tmp/status.json"
 "$cat_helper" normalize "$tmp/status.json" >"$tmp/out"
 assert "$tmp/out" '.ok and .plugins[0].installAvailable' 'missing optional status preserves listing availability'
-jq '.plugins=[{id:"test.weather",name:"Weather",repo:"https://github.com/test/weather",installAvailable:true}]' "$TEST_FIXTURE" >"$tmp/install.json"
-TEST_CATALOG="$tmp/install.json" "$cat_helper" refresh >/dev/null
-"$act" install test.weather https://github.com/test/weather >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("consent"))' 'missing consent'
-[[ ! -e $tmp/argv ]]
-"$act" install '../bad' https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("ID"))' 'action invalid ID'
-"$act" install test.weather 'https://github.com/test/weather;echo BAD' --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("HTTPS"))' 'action injection URL rejected'
-"$act" install test.weather https://github.com/test/different --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("selected source"))' 'consented source must match selected listing'
-TEST_LOCAL_FAIL=1 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("shell"))' 'stopped shell safe failure'
-printf '{"plugins":[{"id":"test.dormant"}]}' >"$HOME/.config/omarchy/shell.json"
-"$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("undiscovered"))' 'dormant references cannot auto-enable cloned code'
-printf '{"retained":"config"}' >"$HOME/.config/omarchy/shell.json"
-# Real Git resolves an approved HTTPS URL to a local transport through insteadOf.
-# The helper must stop before delegating any add/enable action.
-"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" url."file://$tmp/unapproved/".insteadOf https://github.com/test/
-resolved=$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" "$TEST_REAL_GIT" ls-remote --get-url -- https://github.com/test/weather)
-[[ $resolved == "file://$tmp/unapproved/weather" ]]
-GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" TEST_REAL_URL_RESOLUTION=1 "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("Git rewrites"))' 'real Git insteadOf transport bypass rejected before add'
-[[ ! -e $tmp/argv ]]
-"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" --unset-all url."file://$tmp/unapproved/".insteadOf
-"$TEST_REAL_GIT" config --file "$tmp/rewrite.gitconfig" url.https://github.com/unapproved/.insteadOf https://github.com/test/
-GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$tmp/rewrite.gitconfig" TEST_REAL_URL_RESOLUTION=1 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("different repository"))' 'real Git HTTPS-to-HTTPS rewrite also rejected'
-[[ ! -e $tmp/argv ]]
-TEST_ACTION_FAIL=1 "$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.stderr|contains("validation failure"))' 'subprocess diagnostics'
-"$act" install test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok and any(.plugins[];.id=="test.weather" and .enabled==false)' 'install defaults disabled'
-mkdir -p "$HOME/.config/omarchy/plugins/test.weather/.git"
-cp "$tmp/argv" "$tmp/before-update"
-"$act" update test.weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("approved source"))' 'update requires approved source'
-TEST_GIT_ORIGIN=https://github.com/test/changed "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("changed since consent"))' 'origin changed while consent was open rejects update'
-TEST_EFFECTIVE_ORIGIN=https://github.com/test/changed "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("changed since consent"))' 'fresh effective origin differs from earlier local snapshot'
-TEST_EFFECTIVE_ORIGIN=$'https://github.com/test/weather\nhttps://github.com/test/other' "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("effective Git origin"))' 'ambiguous origin URLs rejected'
-"$act" update test.weather 'https://github.com/test/weather;echo unsafe' --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("HTTPS"))' 'update approved source remains strictly validated'
-cmp "$tmp/before-update" "$tmp/argv"
-pass=$((pass+1))
-"$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok' 'update verifies fetched revision'
-TEST_REV_MISMATCH=1 "$act" update test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("revision"))' 'update revision mismatch rejected'
-[[ $(find "$XDG_STATE_HOME/oma_plug_sea" -name 'shell.json.*' | wc -l) -ge 1 ]]
-for backup in "$XDG_STATE_HOME/oma_plug_sea"/shell.json.*; do cmp "$HOME/.config/omarchy/shell.json" "$backup"; done
-pass=$((pass+1))
-"$act" enable test.weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok and .plugins[0].enabled' 'enable postcondition'
-tail -4 "$tmp/argv" >"$tmp/placement"
-printf 'enable\ntest.weather\n--section\nright\n' >"$tmp/expected"
-cmp "$tmp/placement" "$tmp/expected"
-pass=$((pass+1))
-TEST_FALSE_SUCCESS=1 "$act" disable test.weather >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("not confirmed"))' 'false CLI success rejected'
-TEST_ACTION_DELAY=1 "$act" disable test.weather >"$tmp/first" &
-pid=$!
-sleep 0.15
-"$act" disable test.weather >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("Another"))' 'concurrency rejection'
-wait "$pid"
-assert "$tmp/first" '.ok and (.plugins[0].enabled|not)' 'first concurrent operation finishes'
-"$act" remove test.weather --confirm-remove >"$tmp/out"
-assert "$tmp/out" '.ok and (.plugins|length)==0' 'remove postcondition'
-"$act" disable test.weather >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("disappeared"))' 'disappeared plugin'
-"$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok and .plugins[0].enabled' 'install and enable separately verified'
-"$act" remove test.weather --confirm-remove >/dev/null
-# A clone/source changing during installation stays disabled on provenance failure.
-cp "$tmp/argv" "$tmp/before-provenance"
-TEST_GIT_ORIGIN=https://github.com/test/different "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("provenance differs")) and all(.plugins[];.enabled==false)' 'changed cloned raw origin refuses enable'
-printf 'add\nhttps://github.com/test/weather\n--yes\n' >>"$tmp/before-provenance"
-cmp "$tmp/before-provenance" "$tmp/argv"
-"$act" remove test.weather --confirm-remove >/dev/null
-cp "$tmp/argv" "$tmp/before-provenance"
-TEST_EFFECTIVE_ORIGIN=https://github.com/test/different "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and (.error|contains("provenance differs")) and all(.plugins[];.enabled==false)' 'changed cloned effective origin refuses enable'
-printf 'add\nhttps://github.com/test/weather\n--yes\n' >>"$tmp/before-provenance"
-cmp "$tmp/before-provenance" "$tmp/argv"
-"$act" remove test.weather --confirm-remove >/dev/null
-TEST_INSTALL_ID=test.surprise "$act" install-enable test.weather https://github.com/test/weather --consent-unsandboxed >"$tmp/out"
-assert "$tmp/out" '.ok==false and all(.plugins[];.enabled==false)' 'mutable manifest ID cannot auto-enable unexpected plugin'
 printf '[{"id":"test.linked","name":"Linked","enabled":false}]' >"$tmp/local.json"
 mkdir -p "$HOME/.config/omarchy/plugins/test.linked"
 printf '{"version":"9.9","description":"decoy"}' >"$tmp/decoy.json"

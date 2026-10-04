@@ -2,6 +2,8 @@
 
 Verified **2026-09-05**, on installed Omarchy `dev (f632d26b)`. This is evidence for the implementation, not a promise about future upstream behavior. No packaged Omarchy source or user configuration was modified during research. The active shell uses `$OMARCHY_PATH` (a user-owned checkout on this machine), not necessarily `/usr/share/omarchy`. All researched READMEs, PluginRegistry, lifecycle CLI commands, and representative QML files were compared byte-for-byte with the active checkout and are identical. Inspect active runtime logs with `quickshell log -p "$OMARCHY_PATH/shell"`.
 
+The research below records dated platform behavior. The application now uses the exact-snapshot installation boundary documented in the October 4 section; older descriptions of the app's mutable CLI handoff are historical, not its current contract.
+
 ## Installed host
 
 Read `/usr/share/omarchy/shell/README.md`, `shell/plugins/README.md`, `shell/services/PluginRegistry.qml`, the installed `omarchy-plugin-{add,enable,disable,update,remove,list,catalog,validate}` commands, and the Omarchy skill and its `plugins.md` guide. `omarchy plugin --help`, `omarchy plugin list --json`, and `omarchy-shell --help` succeed. The shell is running and discovers an existing user-owned plugin clone.
@@ -30,6 +32,8 @@ Trust-related fields: `verificationStatus`, `verificationSnapshotStatus`, `verif
 
 [Marketplace verification policy](https://github.com/omacom/omarchy-plugin-marketplace/blob/main/VERIFICATION.md) ties limited automated checks and some maintainer review to exact commits. `snapshot-verified` differs from `update-unverified`. Verification is not a security audit, endorsement, or safety guarantee. Even a matching observed SHA cannot guarantee the next clone: the installer follows mutable upstream HEAD.
 
+Application policy now installs only the recorded verified snapshot. The platform CLI still follows mutable HEAD; see the October 4 recheck below.
+
 ## Lifecycle and safety implications
 
 - `omarchy plugin add <git-url> --yes` clones, validates, and lands **disabled**. `--enable` exists, but there is no exact-SHA/ref input. The CLI does not run installation hooks. Never derive an executable shell command from catalog strings.
@@ -46,7 +50,7 @@ The official repository [omacom/omarchy-plugin-registry](https://github.com/omac
 
 **Deployment check:** `https://plugins.omarchy.org/plugins.json`, `/all.json`, and `/config.json` each returned **HTTP 404, text/html** in this session. The installed CLI advertises Git installs only. These specs are not deployed APIs to hardcode as working today.
 
-Migration: introduce an adapter for real deployed browse JSON, render all security notices and nullable fields, and delegate state changes to the official client after it ships. That client must own pinned signing roots, Ed25519 signatures, monotonic generations, expiry/freshness, SHA-256, compatibility, receipts and revocation handling. Do not implement partial verification in QML, and never use unsigned browse checksums as installation authority. Until then explicitly identify the current backend as mutable Git and the catalog as presentation metadata.
+Migration: introduce an adapter for real deployed browse JSON, render all security notices and nullable fields, and delegate state changes to the official signed client after it ships. That client must own pinned signing roots, Ed25519 signatures, monotonic generations, expiry/freshness, SHA-256, compatibility, receipts and revocation handling. Do not implement partial signature verification in QML, and never use unsigned browse checksums as signing authority. The current exact-Git-snapshot backend binds contents to the selected reviewed SHA but does not authenticate signed marketplace artifacts.
 
 Retry endpoint verification:
 
@@ -72,3 +76,16 @@ The manifest's `menu` kind denotes a summoned menu surface, not contributions to
 The approved application ID is now `webtechsponge.plugin-sea`, with author **webTechSponge** and an MIT license. Earlier session evidence may reference the former development ID `local.oma-plug-sea`; those historical observations remain valid for the platform contracts. The namespace change does not confer a verification badge.
 
 Managed development installations must be uninstalled using the old checkout **before** its source is updated, then installed from the new checkout. Standard Git installations require backing up local edits, hiding/removing the old ID and installing the new ID; ordinary Git update does not migrate identity. CLI and cache/state identifiers are unchanged. See [README migration instructions](../README.md#migration-from-the-development-id).
+
+## Exact-snapshot installation recheck — 2026-10-04
+
+Installed Omarchy is `4.0.2-2`. `omarchy plugin --help` still exposes no SHA/ref option for add/update. `omarchy plugin validate .` succeeded, and live `list --json` returned 41 plugins with 34 enabled before smoke fixtures.
+
+The deployed catalog uses `verificationSnapshotStatus: "verified"` with a full `verificationCommit` matching `listingValidatedCommit`; eligible repository layout is `root-plugin` with `manifestPath: "manifest.json"`. A verified snapshot can coexist with `verificationCoverage: "update-unverified"` and a different observed upstream SHA. The app installs the verified listing SHA, never that newer observed SHA.
+
+The installed static catalog excludes hidden staging directories. The Quickshell registry's top-level scan and watcher also exclude hidden entries. A private hidden staging container within the plugin directory therefore permits same-filesystem atomic publication after static validation. The real `/usr/bin/mv` is GNU coreutils 9.12 and supports `--no-copy --update=none-fail -T`.
+
+Plugin Sea no longer hands community installation or updates to mutable platform add/update. It stages a controlled exact Git checkout, validates it with Omarchy, publishes without overwrite, and verifies the content again before either enable path. Static collision checks reuse the platform catalog and support unrelated existing development symlinks. Updates remain explicit external actions. Cached browsing still works offline, but install/community enable require fresh eligible metadata.
+
+This does not authenticate unsigned catalog metadata, sandbox community code or eliminate external same-user filesystem races. The separate standard installation of Plugin Sea itself still uses the external platform Git installer.
+

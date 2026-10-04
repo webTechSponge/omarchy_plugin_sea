@@ -11,6 +11,12 @@ Item {
         onResultAccepted: function(result) { accepted = accepted.concat([result]); }
     }
     function check(value, message) { if (!value) throw new Error(message); assertions += 1; }
+    function eligible(id, repo) {
+        return {id:id,name:id,repo:repo,installAvailable:true,upstreamAvailable:true,
+            listingValidatedCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            verificationCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            verificationSnapshotStatus:"verified",repositoryLayout:"root-plugin",manifestPath:"manifest.json"};
+    }
     Timer { interval: 1; running: true; onTriggered: {
         try {
             var remote = [
@@ -18,6 +24,8 @@ Item {
                 {id:"test.two",name:"Same",description:"Window helper",author:"Ben",category:"Desktop",tags:["tiling"],stars:5,listedAt:"2026-09-01",installAvailable:true},
                 {id:"constructor",name:"Prototype edge",category:"Tools",tags:[],installAvailable:false}
             ];
+            remote[0] = Object.assign(eligible("test.one","https://github.com/test/one"), remote[0]);
+            remote[1] = Object.assign(eligible("test.two","https://github.com/test/two"), remote[1]);
             var local = [{id:"test.two",name:"Renamed locally",enabled:false,firstParty:false}, {id:"test.local",name:"Local",enabled:true,firstParty:false}, {id:"omarchy.clock",enabled:true,firstParty:true}];
             var rows = Catalog.correlate(remote,local);
             check(rows.length === 4,"Local-only plugin retained, builtins omitted");
@@ -76,25 +84,50 @@ Item {
             check(!Catalog.sourceMatches(unknown), "Unknown installed source never matches");
             check(!Catalog.sourceMatches(standalone), "Local-only rows have no catalog provenance to match");
             check(!Catalog.sourceMatches(listed), "Uninstalled listing is not an installed source match");
-            check(Catalog.verificationLabel(forked).indexOf("Verified") === -1 && Catalog.verificationLabel(forked).indexOf("differs") >= 0, "Fork cannot inherit original verified badge");
-            check(Catalog.verificationLabel(unknown).indexOf("unknown") >= 0, "Unknown origin explicitly unverified");
-            check(Catalog.verificationLabel(matched) === "Installed code unverified", "Matching origin does not verify installed revision");
-            check(Catalog.verificationLabel(standalone).indexOf("unverified") >= 0, "Local-only installation explicitly unverified");
-            check(Catalog.verificationLabel(listed) === "Catalog: Verified", "Uninstalled verification remains catalog-scoped");
-            check(Catalog.provenanceNote(forked).indexOf("does not apply") >= 0, "Mismatch provenance explicitly disclaims catalog verification");
-            check(Catalog.provenanceNote(unknown).indexOf("unknown") >= 0, "Missing provenance explicit");
-            check(Catalog.provenanceNote(matched).indexOf("not the installed revision") >= 0, "Matching origin snapshot limitation explicit");
+            var pinned = Object.assign(eligible("test.source","https://github.com/original/plugin"), {
+                upstreamObservedCommit:"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                verificationCoverage:"update-unverified"});
+            check(Catalog.installEligible(pinned), "Newer unverified upstream does not replace reviewed snapshot");
+            var pristine = {id:pinned.id,repo:pinned.repo,headCommit:pinned.listingValidatedCommit,detached:true,clean:true,enabled:false};
+            var ready = Catalog.correlate([pinned],[pristine])[0];
+            check(Catalog.enableAvailable(ready), "Matching detached clean reviewed checkout may enable");
+            ["headCommit","repo","detached","clean"].forEach(function(field) {
+                var changed = Object.assign({},pristine);
+                changed[field] = field === "headCommit" ? pinned.upstreamObservedCommit
+                    : field === "repo" ? "https://github.com/fork/plugin" : false;
+                check(!Catalog.enableAvailable(Catalog.correlate([pinned],[changed])[0]),
+                    "Changed local provenance blocks enable: " + field);
+            });
+            check(!Catalog.enableAvailable(standalone), "Local-only community installation cannot enable in app");
+            check(!Catalog.enableAvailable(unknown), "Unknown origin cannot enable in app");
+            check(!Catalog.enableAvailable(Catalog.correlate([pinned],[pristine],{},false)[0]),
+                "Stale catalog does not authorize community enable");
+            ["listingValidatedCommit","verificationCommit","verificationSnapshotStatus","repositoryLayout","manifestPath","installAvailable","status"].forEach(function(field) {
+                var changed = Object.assign({},pinned);
+                changed[field] = field === "verificationSnapshotStatus" ? "unverified"
+                    : field === "repositoryLayout" ? "suite" : field === "manifestPath" ? "nested/manifest.json"
+                    : field === "status" ? "quarantined" : field === "installAvailable" ? false : "";
+                check(!Catalog.installEligible(changed), "Incomplete or blocked snapshot prevents install: " + field);
+            });
+            check(!Catalog.installEligible(Object.assign({},pinned,{listingValidatedCommit:"abc123"})), "Short revision cannot authorize installation");
+            var availableListing = Object.assign({},pinned,{status:"Available"});
+            check(Catalog.status(availableListing) === "Available", "Eligible uppercase availability status offers installation");
+            check(Catalog.status(Object.assign({},availableListing,{listingValidatedCommit:""})) === "Installation unavailable",
+                "Raw availability status cannot authorize missing reviewed revision");
+            check(Catalog.status(Object.assign({},availableListing,{verificationSnapshotStatus:"unverified"})) === "Installation unavailable",
+                "Raw availability status cannot authorize unverified snapshot");
+            check(Catalog.enableAvailable({local:{id:"omarchy.clock",firstParty:true,enabled:false}}), "First-party enable does not require community snapshot");
+            check(!Catalog.installEligible(Object.assign({},pinned,{id:"omarchy.reserved"})), "Reserved namespace cannot install community code");
+            check(!Catalog.installEligible(Object.assign({},pinned,{catalogCurrent:false})), "Stale browsing evidence cannot authorize install");
             check(forked.verificationStatus === "Verified" && forked.local.repo === "https://github.com/Fork/Plugin" && forked.id === listed.id, "Catalog presentation and ID correlation retained");
             var unknownCatalog = {local:{repo:"https://github.com/owner/repo"}, repo:""};
-            check(!Catalog.sourceMatches(unknownCatalog) && Catalog.provenanceNote(unknownCatalog).indexOf("unknown") >= 0, "Unknown catalog origin is not claimed as a confirmed mismatch");
+            check(!Catalog.sourceMatches(unknownCatalog) && !Catalog.enableAvailable(unknownCatalog), "Unknown catalog origin cannot authorize enable");
             ["quarantined", "yanked", "unavailable", "quarantined by upstream"].forEach(function(status) {
                 var row = Object.assign({}, matched, {status:status});
                 check(Catalog.status(row).indexOf("Enabled") >= 0 && Catalog.status(row).indexOf(status) >= 0, "Installed state retains catalog lifecycle: " + status);
-                check(Catalog.lifecycleWarning(row).indexOf(status) >= 0 && Catalog.lifecycleWarning(row).indexOf("disable or remove") >= 0, "Independent warning preserves recovery: " + status);
                 row.local = Object.assign({}, row.local, {enabled:false});
-                check(Catalog.status(row).indexOf("disabled") >= 0 && Catalog.lifecycleWarning(row).length > 0, "Disabled installation retains warning");
+                check(Catalog.status(row).indexOf("disabled") >= 0, "Disabled installation retains state");
             });
-            check(Catalog.lifecycleWarning(Object.assign({}, forked, {status:"quarantined"})).indexOf("not confirmed to match") >= 0, "Fork warning identifies catalog association limitation");
             check(Catalog.lifecycleWarning(Object.assign({}, matched, {status:"active"})) === "", "Active listing has no lifecycle warning");
             check(Catalog.lifecycleWarning(standalone) === "", "Local-only source does not inherit lifecycle warning");
 

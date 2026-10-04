@@ -4,7 +4,7 @@ cd -- "$(dirname -- "$0")/.."
 scripts/build-preview
 lib/preview-decode --check
 omarchy plugin validate .
-for file in bin/* scripts/* tests/*.sh; do
+for file in bin/* scripts/* lib/*.sh tests/*.sh; do
   [[ -f $file ]] || continue
   bash -n "$file"
 done

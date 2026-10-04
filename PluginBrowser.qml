@@ -130,7 +130,7 @@ Item {
         localState.requestRead();
     }
     function rebuild() {
-        rows = Catalog.correlate(catalog, localPlugins, root.engagement);
+        rows = Catalog.correlate(catalog, localPlugins, root.engagement, !stale && !catalogError);
         categoryOptions = Catalog.categories(rows);
         filtered = Catalog.filter(rows, query, category, scope, sort, sortDirection);
         if (detail) {
@@ -140,8 +140,24 @@ Item {
         }
         grid.currentIndex = filtered.length ? Math.max(0, Math.min(grid.currentIndex, filtered.length - 1)) : -1;
     }
+    function actionRefusal(action, plugin) {
+        if (["install", "install-enable", "enable", "disable", "remove", "heart"].indexOf(action) < 0)
+            return "Unsupported action. Updates must be managed explicitly outside this app.";
+        if (action !== "install" && action !== "install-enable" && action !== "enable") return "";
+        var matches = rows.filter(function(p) { return p.id === plugin.id; });
+        if (!matches.length) return "The selected listing is no longer present. Refresh and review it again.";
+        var current = matches[0];
+        if (action === "enable" && plugin.local && plugin.local.firstParty)
+            return current.local && current.local.firstParty ? Catalog.enableRefusal(current) : "Installed plugin identity changed. Refresh and review it again.";
+        if (stale || catalogError) return "Current catalog evidence is unavailable. Refresh and review the listing again.";
+        if (current.repo !== plugin.repo || current.listingValidatedCommit !== plugin.listingValidatedCommit)
+            return "The selected repository or immutable revision changed. Refresh and review it again; new consent is required.";
+        return action === "enable" ? Catalog.enableRefusal(current) : Catalog.snapshotRefusal(current);
+    }
     function requestAction(action) {
         if (busy || refreshing || checking || !detail) return;
+        var refusal = actionRefusal(action, detail);
+        if (refusal) { operationMessage = refusal; return; }
         if (action === "disable") { runAction(action, detail); return; }
         pendingPlugin = JSON.parse(JSON.stringify(detail));
         pendingAction = action;
@@ -152,14 +168,17 @@ Item {
         var p = pendingPlugin;
         if (pendingAction === "remove") return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Remove " + p.name + " (" + p.id + ") from this computer? The CLI will remove its installed directory. This cannot be undone through this window.";
         if (pendingAction === "heart") return "Send an anonymous heart for " + p.name + " (" + p.id + ") to the marketplace? The request is reported to the marketplace as an anonymous heart from the plugins.omarchy.org origin; the marketplace rate-limits hearts and records no account or identity alongside the heart.";
-        return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (Catalog.sourceUrl(p) || (p.local ? "Unknown installed origin; local directory: " + (p.local.localPath || "Not reported") : "Source not provided")) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\nCatalog reviewed commit: " + (p.listingValidatedCommit || "Not provided") + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is not installation authority or a security audit.\n\nThe Git CLI installs or updates mutable upstream HEAD, which can differ from the catalog's reviewed commit. " + (pendingAction === "install" ? "This installation will stay disabled so you can inspect its source first." : pendingAction === "update" ? "Updating an enabled plugin may execute the new code immediately. Approving allows the CLI's non-interactive update without an additional diff prompt." : "Approving explicitly authorizes running this plugin's code.");
+        var platform = p.local && p.local.firstParty;
+        return (Catalog.lifecycleWarning(p) ? Catalog.lifecycleWarning(p) + "\n\n" : "") + "Plugin: " + p.name + "\nExact ID: " + p.id + "\nSource: " + (platform ? Catalog.sourceUrl(p) || "Platform-managed plugin" : p.repo) + (platform ? "\nRevision: platform-managed" : "\nImmutable revision: " + p.listingValidatedCommit) + "\nVerification: " + Catalog.verificationLabel(p) + "\n" + Catalog.provenanceNote(p) + "\n" + Catalog.revisionNote(p) + "\n\nThis plugin runs UNSANDBOXED as your user when enabled. It can read and change your files and run commands. Catalog metadata is unsigned; pinning is not authentication, a safety certification, or a sandbox.\n\n" + (pendingAction === "install" ? "Install exactly this revision, detached and disabled, so you can inspect the source first." : pendingAction === "install-enable" ? "Install exactly this revision, then recheck its origin, revision and content before enabling. Approving explicitly authorizes running this plugin's code." : platform ? "Approving explicitly authorizes the platform to enable this plugin." : "Recheck the installed origin, exact revision, detached state and clean content against this current listing snapshot before enabling. Approving explicitly authorizes running this plugin's code.");
     }
     function runAction(action, plugin) {
         if (busy || refreshing || checking) return;
+        var refusal = actionRefusal(action, plugin);
+        if (refusal) { pendingAction = ""; pendingPlugin = null; operationMessage = refusal; return; }
         var args = [helperDir + "oma-plug-sea-action", action, plugin.id];
-        if (action === "install" || action === "install-enable") args.push(plugin.repo);
-        if (action === "update") args.push(Catalog.sourceUrl(plugin));
-        if (["install", "install-enable", "enable", "update"].indexOf(action) >= 0) args.push("--consent-unsandboxed");
+        if (action === "install" || action === "install-enable" || (action === "enable" && !(plugin.local && plugin.local.firstParty)))
+            args.push(plugin.repo, plugin.listingValidatedCommit);
+        if (["install", "install-enable", "enable"].indexOf(action) >= 0) args.push("--consent-unsandboxed");
         if (action === "remove") args.push("--confirm-remove");
         pendingAction = "";
         diagnostics = "";

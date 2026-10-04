@@ -25,7 +25,7 @@ omarchy-shell shell summon webtechsponge.plugin-sea '{}'
 
 For a standard Git installation, this is the opening command. Omarchy does not automatically create menu entries or launchers for overlays. The separate development-install workflow below adds `oma-plug-sea` and **Setup → Plugins → Browse**.
 
-To update a standard installation, close the browser and run `omarchy plugin update webtechsponge.plugin-sea`. To remove it, run `omarchy plugin remove webtechsponge.plugin-sea`. The preview cache is retained and can be removed separately.
+To update a standard installation of Plugin Sea itself, close and disable it, then run `omarchy plugin update webtechsponge.plugin-sea`. That external command follows mutable upstream HEAD; inspect the resulting code and revision before enabling again. To remove it, run `omarchy plugin remove webtechsponge.plugin-sea`. The preview cache is retained and can be removed separately.
 
 The repository directory is `omarchy_plugin_sea` and the visible application name is **Omarchy Plugin Sea**. The permanent manifest ID is `webtechsponge.plugin-sea`, authored by **webTechSponge** under the MIT license. The existing `oma-plug-sea` command and `oma_plug_sea` cache/state paths remain unchanged.
 
@@ -83,28 +83,30 @@ Re-run `mise run install` after source changes. Omarchy validates against symlin
 - Click a detail preview (or focus it and press Enter/Space) to open the original-resolution viewer. Use Fit, 100%, zoom controls and scrolling/dragging to inspect it; Escape returns to the same detail page. Original images keep the existing download and decoder safety limits, with a separate cache from card previews.
 - The Available filter shows only listings supported by the in-app installer; manual-only entries remain in All plugins.
 - Catalog warnings such as quarantined or withdrawn remain visible even when a plugin is installed, including in action consent. Disable and remove remain available for recovery.
-- Install defaults to disabled. Install & enable is a separate explicit choice. Enable, disable, update and removal appear according to local state.
+- Install defaults to disabled at the exact verified listing commit. Install & enable is a separate explicit choice. Community Enable requires a matching, detached, clean snapshot; disable and removal remain recovery actions. Updates are managed externally, not through an in-app update button.
 - Operations show progress, capture stdout/stderr in Diagnostics, prevent conflicting actions, and confirm local state before reporting success.
 
 ## Catalog and trust
 
 Verified on **2026-09-05**: `https://omarchyplugins.com/` redirects to `https://plugins.omarchy.org/`; the working deployed source is [`/catalog.json`](https://plugins.omarchy.org/catalog.json), containing 2,427 listings during verification. The marketplace's own source is [omacom/omarchy-plugin-marketplace](https://github.com/omacom/omarchy-plugin-marketplace). This is browse metadata, **not a signed installation registry**. See [platform research](docs/platform-research.md) for exact source contracts and official registry deployment probes.
 
-Community plugins run **unsandboxed as your user**. Browsing and opening details never import their QML or execute their scripts. The browser never executes a catalog `installCommand`. It accepts canonical HTTPS GitHub repository sources for installation and delegates Git operations and manifest validation to `omarchy plugin add/enable/disable/update/remove`.
+Community plugins run **unsandboxed as your user**. Browsing and opening details never import their QML or execute their scripts. The browser never executes a catalog `installCommand`. It fetches an exact reviewed Git object itself, uses `omarchy plugin validate` for static validation, and delegates enable/disable/removal to Omarchy. The standard commands above install Plugin Sea itself through the platform's mutable Git installer; they are separate from this app's pinned community-install path.
 
-Consent snapshots the exact ID/source and clearly labels catalog verification and reviewed commits. For installed plugins, View installed source opens the installed origin; a separate Catalog source link identifies a differing listing repository. Missing or differing origins never inherit catalog verification. Even matching origins do not verify the installed revision. A listing marked “verified” describes the marketplace's snapshot checks, not a security audit. The installed Git CLI clones or updates **mutable HEAD**, which may differ from the listed reviewed commit. Updates of enabled code can execute it immediately; consent explicitly acknowledges skipping the CLI's interactive diff prompt.
+In-app installation requires an available root-plugin listing with `manifestPath: "manifest.json"`, a full lowercase 40-character `listingValidatedCommit`, `verificationSnapshotStatus: "verified"`, and the same `verificationCommit`. Consent snapshots the exact ID, canonical HTTPS GitHub repository and SHA. A newer unverified upstream commit does not replace the older verified snapshot. Missing, mismatched, blocked or stale evidence prevents installation; a fresh catalog is required again before publication and community enable.
 
-Installation checks Git’s effective clone URL before calling Omarchy, so an existing Git URL rewrite cannot silently select another repository. After installation, the app checks the disabled checkout’s manifest and both its recorded and effective Git origins before reporting success or enabling it.
+The helper fetches only that commit into private hidden staging, checks out detached, verifies literal file contents, origin and manifest ID, and validates the root with Omarchy before an atomic no-overwrite/no-copy publication. It never installs HEAD and resets afterward. Git operations isolate inherited configuration, hooks, filters, URL rewrites and replacement objects. Submodules and unsafe local Git configuration are unsupported.
 
-Updates carry the approved installed origin to the helper, which rejects changed, rewritten or ambiguous origins before invoking the CLI. Omarchy does not expose an atomic expected-origin update option: unrelated external Git configuration changes can still race the final check and fetch.
+Install & enable confirms disabled discovery first, then rechecks the snapshot before enabling. Standalone community Enable applies the same revision/content checks, including untracked/ignored files, ownership and writable-file refusal. Modified, attached, unknown-origin or local-only community installations must be managed explicitly outside the app; user edits are never reset to make them eligible. First-party enable remains platform-managed. Installed-source links still identify the actual origin; a content match is not authentication, a security audit or a safety guarantee.
 
-Install & enable first installs disabled, verifies the expected ID and then enables. A source changing its ID fails confirmation and can leave a disabled checkout to inspect. Installation is refused when undiscovered third-party IDs remain referenced in shell.json, since those dormant references could cause a supposedly disabled installation to load code. No configuration is silently removed to bypass that guard. Existing configuration is backed up before mutations. Bar widgets use their manifest's default placement through the supported enable command.
+Installation is refused when undiscovered third-party IDs remain referenced in shell.json, since dormant references could activate newly discovered code. No configuration is silently removed to bypass that guard. Existing configuration is backed up before mutations, unrelated development symlinks remain untouched, and bar widgets use their manifest's default placement through the supported enable command. A failure after publication retains the installation and reports its actual or unconfirmed state for inspection.
 
 The official signed registry API/client was not deployed at verification time. When a real signed client ships, the catalog adapter can migrate independently, while all signature, checksum, freshness, compatibility, receipt and revocation enforcement must remain owned by that client. Current code does not fabricate those guarantees.
 
 ## Offline behavior
 
 The last good normalized catalog lives at `${XDG_CACHE_HOME:-~/.cache}/oma_plug_sea/catalog.json`. Refresh uses 5-second connection and 25-second total timeouts and atomically replaces only a validated document. Malformed optional status values disable only the affected listing. Failed requests, malformed required entries and duplicate IDs preserve the good cache and return it with a visible stale indicator and refresh timestamp. Without any cache, the UI shows an honest empty/error state, retains local plugins, and offers Refresh. No fixture catalog is passed off as live data.
+
+Cached browsing remains available offline, but installation and community enable require a successful fresh catalog fetch. A stale cache cannot authorize new code installation or enable.
 
 Previews are accepted only from the marketplace’s supported WebP asset URLs. Every accepted image goes through the restricted downloader and separate decoder; the desktop shell receives a cached PNG, never a remote image URL. Other formats, origins and failed previews display a fallback. Conversion is bounded and cached independently. Lifecycle commands have a 120-second timeout and a per-user action lock. A stopped shell, missing command, changed plugin state or unsuccessful postcondition produces a failure with diagnostics.
 
@@ -122,6 +124,7 @@ bash tests/backend.sh
 bash tests/model.sh
 bash tests/standard-install.sh
 bash tests/standard-cli-install.sh
+bash tests/pinned-install.sh
 scripts/test-integration
 git diff --check
 ```
@@ -130,7 +133,7 @@ Desktop tests require the managed development installation; they are not intende
 
 Standard Git installations clone the full repository, not just the runtime files. Do not commit automatically loaded agent instruction files such as `AGENTS.md`, including in subdirectories: they would become ambient instructions for agents working in an installed plugin. Keep agent-specific contributor guidance outside this repository under a filename agents do not automatically load. The real Git installation regression checks the installed tree for common auto-loaded instruction filenames.
 
-The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, enables, disables and removes it through the real helper/CLI, and verifies each postcondition. It never installs arbitrary third-party code. Development integration tests use isolated HOME and mocked CLI state. The standard-install regression uses the real Omarchy add/validate/catalog commands with a temporary local Git repository, while mocking shell IPC and the preview download. Another source-only test covers automatic compilation, concurrent cache reuse, source updates and failed-build recovery without mise. Backend tests exercise malformed/partial data, invalid URLs/IDs, stale cache, network and subprocess failures, concurrency, consent, source mismatches and false-success rejection. Model tests execute the actual JavaScript through Qt6.
+The smoke test briefly creates an inert locally authored `local.oma-plug-sea-smoke` panel, verifies that local-only in-app enable is refused, enables it explicitly through the external CLI, then disables/removes it through the helper. It never enables arbitrary third-party code. Development integration tests use isolated HOME and mocked CLI state. `tests/pinned-install.sh` uses real Git and the installed Omarchy validator/catalog to prove reviewed A versus upstream B, content/identity tampering refusals, consent freshness, collision guards and retained failure states; only network transport and shell enable state are simulated. The standard-install regression separately exercises installing Plugin Sea itself through real Omarchy add/validate/catalog with an isolated local repository. Model tests execute the actual JavaScript through Qt6.
 
 [Architecture and helper schema](docs/architecture.md) · [Verification evidence](docs/verification.md)
 
@@ -186,19 +189,19 @@ These limits mostly concern installing and updating plugins. You can still brows
 
 ### Some plugins need manual installation
 
-The app can install plugins whose GitHub repositories follow the structure supported by Omarchy's installer. Some listings contain several plugins in one repository, need custom setup, or replace a larger part of the desktop. You can browse those listings and open their source, but you must follow the author's installation instructions yourself. The **Available** filter shows only listings supported by the in-app installer.
+The app installs only available root-plugin GitHub repositories with exact verified snapshot evidence. Listings containing several plugins, custom setup, shell suites, missing review evidence or unsupported Git layouts remain browseable but require external management. The **Available** filter shows only currently eligible snapshot installations.
 
 ### Catalog checks do not guarantee the code you install
 
-When you install or update a plugin, Omarchy fetches the repository's current code. Its author may have changed that code since the catalog checked it. A **verified** catalog label therefore does not mean the plugin is safe, or that your installed version was checked.
+In-app installation selects the exact verified listing commit, not the author's current upstream HEAD. The backend verifies detached HEAD and literal contents before publication and enable. A newer upstream version is not substituted automatically.
 
-The current installer does not use signed releases that would let it authenticate the exact version described by the catalog. Community plugins run with your user account's permissions when enabled, so only enable code you trust. **Install disabled** lets you inspect the downloaded code before enabling it; it does not make that code safe automatically.
+Catalog metadata is still unsigned: pinning binds installed Git content to its selected SHA, but does not authenticate a signed marketplace authority or make reviewed code safe. Community plugins run with your user account's permissions when enabled. **Install disabled** lets you inspect the downloaded code; it is not a sandbox.
 
 ### A catalog refresh is different from a plugin update
 
 **Refresh available** means the catalog has changed—for example, a new plugin was listed or a description was updated. It does not necessarily mean any of your installed plugins have updates.
 
-The app cannot reliably show an update-available badge for each installed plugin in advance. **Check & update** checks the installed plugin's repository and applies an update if one is available; it is not a check-only action. Updating an enabled plugin may run its new code immediately, so the app asks for consent first.
+There is no in-app update operation. For a Git-managed plugin, disable it before an explicit external `omarchy plugin update ID`, because updating enabled code can live-reload and run it immediately. That command follows mutable upstream HEAD and is outside the app's snapshot guarantee. Inspect the resulting code/revision before enabling externally. For non-Git or managed development installations, follow their documented installation workflow instead. A changed checkout may no longer qualify for in-app enable.
 
 ### Remove Plugin Sea from the terminal
 
@@ -214,7 +217,7 @@ Some catalog entries omit compatibility results, capabilities or other details. 
 
 The app prevents its own management operations from overlapping, but it cannot stop a terminal command or another program from changing the same plugin.
 
-For example, a plugin's Git origin could change while its update consent dialog is open. The app checks the origin again and refuses the update if it detects a change. However, Omarchy's update command cannot make that check and the subsequent fetch one indivisible operation, so an external change in between can still slip through. Installation has similar source checks before cloning and before enabling, with the same limitation around simultaneous external changes. Avoid managing the same plugin simultaneously through the app and a terminal.
+The helper checks the selected catalog identity, Git object integrity and installed contents immediately before enabling. Its lock coordinates this app's actions, not arbitrary same-user processes. Another process can still alter files or configuration between a check and shell activation; these checks narrow that race rather than eliminate it. Avoid managing the same plugin simultaneously through the app and a terminal.
 
 Setting up Plugin Sea does not publish your project, push code to GitHub, submit a marketplace listing, or install community plugins. Those are separate actions you choose.
 

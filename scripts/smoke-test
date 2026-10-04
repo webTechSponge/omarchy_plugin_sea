@@ -38,7 +38,12 @@ for ((i=0;i<40;i++)); do
   if omarchy plugin list --json | jq -e --arg id "$id" 'any(.[];.id==$id)' >/dev/null; then break; fi
   sleep 0.25
 done
-bin/oma-plug-sea-action enable "$id" --consent-unsandboxed | jq -e '.ok==true and any(.plugins[];.id=="local.oma-plug-sea-smoke" and .enabled)' >/dev/null
+# Local-only community code is deliberately outside the reviewed-snapshot path.
+bin/oma-plug-sea-action enable "$id" --consent-unsandboxed | jq -e '.ok==false and all(.plugins[];select(.id=="local.oma-plug-sea-smoke")|(.enabled|not))' >/dev/null
+# Explicit external management is safe here: this fixture was authored above,
+# contains only an inert Item, and is never arbitrary third-party code.
+omarchy plugin enable "$id"
+omarchy plugin list --json | jq -e --arg id "$id" 'any(.[];.id==$id and .enabled)' >/dev/null
 bin/oma-plug-sea-action disable "$id" | jq -e '.ok==true and any(.plugins[];.id=="local.oma-plug-sea-smoke" and (.enabled|not))' >/dev/null
 bin/oma-plug-sea-action remove "$id" --confirm-remove | jq -e '.ok==true and all(.plugins[];.id!="local.oma-plug-sea-smoke")' >/dev/null
 [[ ! -e $fixture ]]
@@ -46,4 +51,4 @@ trap - EXIT
 scripts/open-verified-runtime
 status | jq -e '.opened==true' >/dev/null
 omarchy-shell shell hide webtechsponge.plugin-sea
-printf 'Real shell load/summon/hide and inert fixture enable/disable/remove passed.\n'
+printf 'Real shell load/summon/hide, local-only enable refusal, and externally enabled inert fixture disable/remove passed.\n'
