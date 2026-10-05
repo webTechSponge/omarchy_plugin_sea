@@ -196,3 +196,175 @@ At 1120×748 logical size, the Overview install consent visibly named exact SHA 
 
 These are local implementation and runtime checks, not marketplace approval. Verification did not push code, apply approval labels, or create a new submission. Keep the finalized commit's full SHA/default-branch HEAD frozen, open a new submission referencing #5215, and obtain fresh matching validation and decoded security-baseline SHAs before requesting the current `approved-and-verified` review/publication path.
 
+## Immutable install review remediation — 2026-10-04
+
+Remediated all three findings against commit `9c9ea8217fd02ef46f50c8f20bcf88622a019cae` in [the post-commit review](immutable-install-review.md). The original reproduction results were treated as established evidence, not rerun before choosing fixes. The initial working tree contained the review file and its plan-status edit; both were retained and updated in place.
+
+### Implemented boundary
+
+- **P1 selected source:** enumerate raw third-party top-level manifests before ID deduplication, preserve unrelated development symlinks/hidden staging semantics, and require exactly one candidate at the canonical reviewed checkout. The backend additionally inspects the running registry's selected `__sourceDir` through the updated, loaded browser's `activationSource(ID)` method over supported shell call IPC. Missing, scanning or mismatched inspection cannot authorize enable. Stale selection requires bounded rescan plus explicit matching inspection, not list rows or elapsed time. Both enable paths recheck this invariant; local provenance no longer attaches pristine canonical metadata to an ambiguous/stale selected source.
+- **P1 case folding:** controlled Git commands force `core.ignorecase=false`; repository-local `core.ignorecase=true` remains harmless to extra-path detection. No user edits are reset, normalized away or deleted to pass verification.
+- **P2 polling baseline:** action validation uses unconditional fresh `catalog verify`, sharing the existing bounded fetch/normalization path without reading/writing saved catalog data, validators, hash or refresh lock. Failed verification returns empty stale evidence, not cached authorization. Explicit browser refresh alone changes its persisted baseline; pending consent still deep-copies the exact ID/source/SHA.
+
+First-party enable, disable/remove recovery, detached exact-SHA staging, no HEAD fallback, consent binding and unsigned/unsandboxed warnings remain. Neither the new inspection nor the application lock prevents arbitrary concurrent same-user filesystem changes.
+
+### Consolidated check set
+
+`scripts/check` was invoked once after integration. Static Qt6 analysis passed with **168 advisory host/dynamic-type warnings**, and **69 backend behavior/security assertions** passed. The new registry harness initially could not find mise-installed Node after PATH isolation; it now captures the absolute executable beforehand. The freshness success fixture initially used `git clone`, whose branch config the existing strict allowlist correctly refused; fixture preparation now mirrors controlled init/remote/exact-fetch/detached staging instead of weakening verification.
+
+After these test-only corrections, the remaining consolidated checks were resumed without rerunning the already-passed backend/QML checks:
+
+- **28 catalog freshness assertions** passed, covering refused A/server changed-SHA B, successful A/server metadata/new-listing B, independent fresh-evidence failures, byte-preserved browsing baseline, and explicit refresh/no-change coherence. ETag and validator-free raw-hash transitions both ran.
+- **81 pinned-install assertions** passed, including actual-registry winning-shadow refusal, stale-selected-source refusal/refresh, matching singleton-array manifest IDs even when canonical A wins, duplicate/unrelated development symlinks, standalone and postpublication install-and-enable casefold/duplicate refusals, pristine success, first-party behavior and recovery.
+- Actual Qt6 catalog model/source-provenance tests passed.
+- Preview QML downloader boundary and decoder/cache/resource/format/concurrency suites passed.
+- Real Omarchy standard add/validation/catalog, native lazy-build, installed-tree instruction exclusion, plain-install build/retry/dependency scenarios passed.
+- Managed-install ownership, fingerprint mismatch, asynchronous discovery, JSONC round-trip, backup, unowned-target and symlink tests passed. The final whitespace check passed.
+
+Permanent registry regressions execute the installed `PluginRegistry.qml` rescan script, `parseScanOutput`, `validateManifest`, `entryPointUrl` and `setEnabled` functions in a Node VM, plus the installed shell's actual list renderer. Git and platform validate/catalog/enable/disable/remove commands are real. HTTP/Git transport, shell IPC/config persistence and activation are simulated; selected entrypoint bytes are recorded, never executed. The duplicate harness no longer assumes activation reads `plugins/$id`. Node is a development test prerequisite, not an added runtime package.
+
+### Actual rendered notification and consent surface
+
+A temporary standalone Quickshell host rendered the current production `PluginBrowser.qml`, components and catalog model using installed `qs.Commons`/`qs.Ui` and the actual desktop/theme. A small host-only IPC adapter selected rows and invoked the production refresh, poll and consent/action methods; it did not replace their logic or freshness flags. Real catalog/action/local helpers used private cache/state and controlled authored catalog/transport fixtures. Engagement output alone was inert simulated data. The separate host kept the displayed A model observable across global platform rescans; it was not a model-only or Node UI simulation.
+
+Visual inspection at **1120×748 logical size** and actual helper/result state observed:
+
+1. Displayed reviewed A, then served different reviewed B. Polling showed **Refresh available**. Consent visibly retained A's full SHA and unsigned/unsandboxed warning. Accepting A was refused by fresh backend evidence; A remained displayed and a subsequent poll still showed the notification.
+2. Explicit refresh displayed B and a no-change poll cleared the notification.
+3. While A consent remained pending, explicit refresh loaded B into the model. The dialog still displayed A; accepting produced the visible changed-revision/new-consent-required refusal without installation.
+4. With A displayed and B changing only metadata/new listings, consented install-and-enable succeeded for A. The visible completed-action message coexisted with **Refresh available**, and another poll retained it without replacing displayed A.
+5. Explicit refresh loaded the unseen metadata/new listing, changed the detail description to B and returned the toolbar to **Refresh**. No-change polling kept the notification clear.
+
+### Real shell activation and refusal
+
+The managed desktop runtime was updated with recoverable backups and verified on disk and in the running shell as fingerprint `db72ef7ee494093fe2f15432117c2a6faa342c68b6d5389763202148df5c19b2`.
+
+Only a locally authored inert panel (`local.oma-plug-sea-review-inert`) was activated. Reviewed A was `a2fc41efe64c974d5d112aa5a34232a942784bf4`; upstream B was `9cfb71fd9ef33fd4d990d9fab154302dceae0b01`. Catalog HTTP and Git network transport were substituted with that controlled repository; actual Git object operations, Omarchy validation, discovery/rescan, selected-source IPC inspection, activation, QML loading, disable and remove used the real platform.
+
+The production action installed A detached and enabled it; the actually loaded panel's `revision` method returned **A**. After disable, a valid authored `zz-pluginsea-review-shadow` manifest shared the ID. The real registry inspection reported that shadow directory as winner; community enable returned `ok:false` with the ID disabled and no shadow activation. Removing the shadow and adding distinct untracked `extra.qml` under local `core.ignorecase=true` also refused enable, reported no clean authority, and retained both file spellings until explicit fixture removal. A separate native-Bash probe of the actual shared library independently observed A detached with `clean=false` and rejected `sea_verify` while both files remained present.
+
+A transient unavailable shell response during rescan appeared as a JSON parse diagnostic in a successful disable result; later confirmed state remained disabled. No platform warning/exception was suppressed to achieve the proof. All target activation was authored inert code; the shadow and case-colliding content were never enabled.
+
+### Delivery limits
+
+Review statuses and README/architecture/platform/design contracts are updated. These are local remediation checks, not a fresh marketplace security baseline or approval. No installed Omarchy platform file was modified; no commit, push, label or marketplace submission was made. Temporary UI/transport/repository/screenshot scaffolding and the authored runtime fixture are removed; existing managed-install backups remain recoverable.
+
+## Numeric manifest identity remediation — 2026-10-05
+
+Remediated [Finding 4](immutable-install-review.md#finding-4--p2-numeric-comparison-conflates-distinct-registry-ids) only, preserving the uncommitted Findings 1–3 changes and their historical evidence. The established numeric false-refusal reproduction was not rerun before choosing the fix.
+
+### Identity contract and native numerical evidence
+
+Numeric manifest IDs become registry-equivalent strings before exact requested-string equality. Numeric `1000` matches `"1000"`, not `"1e3"`; numeric `1` is distinct from `"01"`. Nested singleton arrays use the same coercion. Raw discovery still includes development directory symlinks, excludes hidden staging and precedes deduplication. Installation collision authorization uses raw candidates, destination absence and shell rows, not the static catalog's narrower numeric-ID policy.
+
+Native `/usr/bin/jq` is **1.8.2**, with decnum literal preservation. Its ordinary binary64 `tostring` differs from JavaScript: `1e-7` becomes `1e-07`, `1e-6` becomes `1e-06`, and `1e20` becomes `1e+20`. Moreover, simply forcing arithmetic is insufficient: literal `1.00000000000000011102230246251565404236316680908203126` rounds to `1` through jq's intermediate 17-digit conversion, while JavaScript selects `1.0000000000000002`. The helper retains the literal, corrects that potential double rounding using exact dyadic midpoints and ties-even, then normalizes shortest digits to JavaScript notation. Negative literals retain their original digits before magnitude conversion.
+
+Source evidence: jq's [literal conversion](https://raw.githubusercontent.com/jqlang/jq/jq-1.8.2/src/jv.c) reduces to `DEC_NUMBER_DOUBLE_PRECISION=17`; [tonumber](https://raw.githubusercontent.com/jqlang/jq/jq-1.8.2/src/builtin.c) also creates preserved literals in decnum builds, so reparsing is not a fix. Its [dtoa implementation](https://raw.githubusercontent.com/jqlang/jq/jq-1.8.2/src/jv_dtoa.c) uses shortest nearest-roundtrip digits with even tie selection; the helper applies [ECMAScript Number string notation](https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-numeric-types-number-tostring).
+
+The implementation uses existing native jq binary64/dtoa and `frexp`/`ldexp`/`nextafter`, not Node or a new production package. The non-decnum direct-parser branch is implemented but was not exercised on another jq build; no cross-build compatibility proof is claimed. The tool shell's bare `jq` was jaq 2.3.0, not the native repository runtime, and was not used as the numerical oracle.
+
+### Consolidated and focused checks
+
+After integration and the authored live consumer exercise, `scripts/check` was invoked **once** and passed:
+
+- **99 pinned-install assertions**, including both distinct numeric/string pairs present before disabled install and Install & enable, exact local provenance, standalone activation from actual registry-selected reviewed bytes, genuine duplicate install/enable refusal, singleton arrays, stale selection, development symlinks, case folding, exact SHA/consent, first-party behavior and recovery.
+- **69 backend behavior/security assertions**, **28 catalog freshness assertions**, and actual Qt6 catalog-model/source-provenance scenarios.
+- Preview QML/downloader and native decoder/cache/resource/format/concurrency suites.
+- Real Omarchy standard self-install/validation/catalog, installed-tree instruction exclusion, native lazy-build/retry/dependency scenarios, managed ownership/fingerprint/asynchronous-discovery/JSONC/backup/symlink integration, and whitespace checks.
+- Qt6 static analysis with **168 advisory host/dynamic-type warnings**.
+
+That invocation initially passed 33 Node-VM numeric formatting cases. A subsequent native Qt probe showed seven out-of-range inputs were rejected by Qt's `JSON.parse`: underflow-to-zero and overflow spellings accepted by Node cannot establish actual platform registry behavior. Those fixtures were removed rather than pinning the Node-only behavior. `bash tests/numeric-format.sh` then passed the final **26** Qt-accepted cases, plus native Qt `JSON.parse`/`String` comparison through `tests/NumericIdentityTest.qml`; targeted native QML lint passed. Coverage includes notation thresholds, signed zero, large-integer binary64 rounding, nearest/tie boundaries, accepted subnormal and near-overflow values, and nested singleton numeric arrays.
+
+The permanent harness executes installed registry scan/parse/validation/source-resolution/enable functions and the installed list renderer. Git and platform commands are real; HTTP/Git transport, shell IPC/config persistence and activation are simulated. It records actual selected entrypoint bytes without executing QML. The native Qt oracle independently prevents Node-only parsing assumptions from being treated as platform evidence. Node remains test-only.
+
+### Real shell consumer proof
+
+Only authored inert panels were activated. Catalog HTTP and Git network transport were routed to local authored repositories; actual Git objects, platform validation, discovery/rescan, running-registry selected-source inspection, enable/disable/remove and QML loading used the real desktop.
+
+| Requested string ID | Unrelated numeric ID present before install | Reviewed A | Upstream B |
+| --- | --- | --- | --- |
+| `1e3` | `1000` | `918ae82be675686a3375afbe4a2a18fe271fe842` | `fb19b5ad72fe5109603806acdac8724abbe442b6` |
+| `01` | `1` | `bc720df4aa9656d3be63592f6a091c042a13cc81` | `758065287e576edfb041cb41fecdbda591a1b97b` |
+
+Both cases installed disabled at their canonical paths, exposed A as detached/clean provenance, and succeeded through standalone enable and Install & enable while the unrelated numeric manifest remained present. The real panel was explicitly summoned before loaded-method inspection; its `proof` returned **REVIEWED A 1e3** or **REVIEWED A 01**, never B. The first smoke attempt inspected before lazy panel loading and stopped; summoning the authored panel corrected the proof procedure, not production code.
+
+For string `1000`, an existing numeric `1000` refused install and Install & enable without publication. After unique pristine A (`f268e5ed29736d0f458e18e197f503c5de585c32`) was installed disabled, a valid later numeric shadow became the observed registry winner. Local provenance was suppressed, standalone enable was refused, and A's checkout remained clean and disabled; the shadow remained disabled. Recovery removal succeeded.
+
+The unchanged platform enable command emitted its static catalog `startswith() requires string inputs` diagnostic with numeric manifests present, but actual enable and confirmed state succeeded. Transient rescan/list parsing diagnostics also remained visible in recovery output. No warning/exception was hidden or platform manifest policy changed to obtain the proof. The live smoke removed its authored fixtures and byte-compared restored `shell.json` with the original.
+
+### Actual rendered consumer surface and current runtime
+
+After the consolidated run, a temporary standalone Quickshell host rendered the current production browser/components/model on the real desktop at **1120×748 logical size**. A host-only IPC adapter opened and selected the authored `1e3` detail and invoked production consent/cancel methods; it did not synthesize local provenance or enable eligibility. Real helpers used private cache/state, authored catalog/Git transport and the real running registry's selected-source inspection. The fixture's generic transport supplied no valid engagement payload, so its rejection warning remained visibly displayed.
+
+With numeric `1000` present, disabled `1e3` showed an enabled **Enable** control. Actual correlated local state contained A's full SHA, canonical path, `detached:true` and `clean:true`; `enableAvailable` was true. The rendered consent named exact ID/repository/A, reported observed detached/clean snapshot/content match and different upstream, and retained unsigned/unsandboxed warnings. Consent was cancelled, not accepted.
+
+The managed runtime was installed with recoverable backups and verified on disk and in the running browser as fingerprint `1b3f383fe49a6c1514c3d78c396626642c35cbaf171ebae6bb322af8d782a6fa`. These are local remediation checks, not a new slow-model review, signed security baseline or marketplace approval. No installed Omarchy platform file or arbitrary third-party code was modified/activated; no project commit, push or submission was made.
+
+Final cleanup stopped the standalone proof process, removed the disabled rendered fixture through the production recovery helper, and removed the authored shadow. The real local helper returned `ok:true` with **41 plugins** and no fixture IDs; all fixture paths were absent, `shell.json` remained byte-identical to its pre-smoke copy, and the current managed runtime fingerprint still verified. Temporary repositories, transport wrappers, native Qt probes, UI host/private cache/state and screenshots were removed. Existing managed-install recovery backups remain.
+
+## Numeric discovery cost remediation — 2026-10-05
+
+Remediated [Finding 5](immutable-install-review.md#finding-5--p2-repeated-numeric-conversion-blocks-local-inspection-and-actions) without replacing Findings 1–4 or unrelated working-tree changes. The documented 150-second local timeout and 120030-ms action failure were treated as established evidence, not rerun.
+
+### Implemented cost boundary
+
+`bin/oma-plug-sea-local` excludes first-party rows and checks canonical manifest existence plus path/manifest/Git symlink eligibility before discovery. It lazily creates one raw-candidate NDJSON snapshot in its private temporary observation directory, reused only by eligible metadata rows. `sea_unique_candidates(ID,PATH)` filters exact canonical IDs before uniqueness. Each selected-source inspection and the original post-inspection path checks remain; Git metadata is observed afterwards.
+
+The snapshot is not persisted or reused between invocations, and is not backend activation authority. `sea_unique_source` still performs fresh raw discovery on every call. Action-level fresh source, selected-source and content verification remain unchanged, including both community enable paths. No timeout was raised, error hidden, candidate omitted, valid numeric manifest rejected or Node runtime dependency added.
+
+Exact dyadic midpoint construction now multiplies decimal strings in blocks of 20 powers, then a remainder. `5^20=95367431640625` and `2^20=1048576` are exact factors. For decimal digit `d<=9` and carry `c<=F-1`, `d*F+c<=953674316406249<2^50<2^53`; products/sums are exactly representable. Quotients after division by 10 are below `2^47`, with maximum rounding error `1/128`, less than the minimum nonintegral distance `0.1` from an integer. Thus floor/borrow/carry propagation remains exact, including multi-digit carry and initial `-1` borrowing. An exponent magnitude of 1,075 uses 53 block passes plus 15 remainder passes instead of 1,075 individual passes. Binary64 midpoint comparisons, ties-even, power-of-two spacing, signs and JavaScript notation remain unchanged.
+
+### Bounded ordinary-row timing and successful consumers
+
+A throwaway isolated HOME/cache/state contained exactly one unrelated authored manifest, with literal `5.0000000000000000001e-324` preserved verbatim. Native Qt `JSON.parse`/`String` accepted it as **`5e-324`**. The installed registry functions and actual shell list renderer produced **39 rows**, retaining all ordinary bundled first-party manifests.
+
+Timing used monotonic Node `performance.now()` around synchronous invocations of the actual production helper/action, with a **20-second subprocess bound** per invocation. Node was only the throwaway measurement driver and existing registry VM; no concurrent bulk stress or consolidated workload ran during measurement. This was a controlled scenario, not a permanent timing threshold or general performance guarantee.
+
+| Actual invocation / state | Elapsed | Observed result |
+| --- | ---: | --- |
+| Local helper, one numeric manifest / 39 rows | **43 ms** | `ok:true`, numeric identity retained |
+| Disabled install with that manifest already present | **1930 ms** | Reviewed A published detached and disabled |
+| Local helper with canonical reviewed A / 40 rows | **562 ms** | Exact A, canonical path, detached/clean provenance |
+| New observation after a real duplicate was added | **423 ms** | Canonical provenance suppressed |
+| Enable with that new duplicate | **834 ms** | Refused, no selected bytes activated |
+| New observation after duplicate removal | **602 ms** | Unique pristine A provenance restored |
+| Standalone enable with numeric manifest present | **4060 ms** | Enabled; exact reviewed A bytes selected |
+| Dirty-content recovery disable | **1242 ms** | Disabled; authored edit retained |
+| Dirty-content recovery remove | **799 ms** | Target removed; numeric source retained |
+| Local helper after recovery / 39 rows | **48 ms** | Ordinary observation still succeeds |
+| First-party disable / enable | **289 / 321 ms** | Both confirmed successful beside numeric source |
+| Install & enable with numeric manifest present | **3959 ms** | Exact A enabled, detached/clean |
+| Final disable / remove | **1260 / 922 ms** | Successful; numeric manifest unchanged |
+
+The reviewed source was `https://github.com/test/numeric-cost`, ID `review.numeric-cost`, reviewed A **`8547b9db15bc0c2fdc58d27eaa2117eea55dfefa`**, with distinct upstream B **`2ae606a3f26a268deb88d2ca38b7b1bf14cd29ee`**. Both enable choices recorded A's actual registry-selected entrypoint bytes, never B. A later losing duplicate was detected even though the selected registry source remained canonical A, proving no prior observation's uniqueness authorized enable. The unrelated numeric manifest remained byte-identical throughout recovery and first-party operations.
+
+Real work: production local/action/discovery/Git-provenance helpers, Git objects/fetch/checkout/status, installed platform validation/list/enable/disable/remove dispatch, installed registry scan/parse/validation/source-resolution/setEnabled and list-rendering functions, and native Qt number parsing. Simulated work: HTTP/Git network transport, shell IPC/config persistence and activation through the existing isolated registry harness. Entrypoint bytes were recorded, not executed; no live third-party QML was activated in this timing scenario.
+
+The unchanged platform enable command emitted its static catalog `startswith() requires string inputs` diagnostic with the valid numeric manifest present. Successful confirmed state and the diagnostic were both retained; nothing was suppressed.
+
+### Consolidated check set
+
+`scripts/check` was invoked **once after integration**, after the bounded timing exercise had completed. All checks passed:
+
+- **29 numeric identity cases** against installed registry functions and native Qt `JSON.parse`/`String`: the original 26 plus the slow scalar, its negative and nested singleton-array variant. Genuine numeric/string collisions and wrong expected source remain rejected.
+- **114 pinned-install assertions**: the original 99 plus successful long-subnormal coexistence, exact A/canonical provenance, added/removed duplicate observations, standalone and combined enable, dirty-content recovery, first-party operations and byte-preserved numeric manifest.
+- **28 catalog freshness assertions**, **69 backend behavior/security assertions**, and actual Qt6 model/source-provenance scenarios.
+- Preview boundary/decoder/cache/resource/format/concurrency checks, real standard add/validation/catalog and native lazy-build/retry/dependency scenarios, installed-tree instruction exclusion, and managed ownership/fingerprint/asynchronous-discovery/JSONC/backup/symlink integration.
+- Qt6 static analysis with **168 advisory host/dynamic-type warnings** and final whitespace checks.
+
+No permanent timing threshold, microbenchmark or wiring/call-count test was added. The numeric helper predicate is exercised through real raw manifests and existing consumers; Node remains test-only. Qt's existing C-locale-to-UTF-8 diagnostic was retained and did not affect the native numeric oracle.
+
+### Current real shell and rendered local state
+
+After the consolidated checks, the managed runtime was deployed with recoverable backups and verified on disk and in the running shell as fingerprint **`27c453b5df4c7fa43e9c32c71fa996a6aed9a0bf143e676e4f0548543a8bd68d`**. The initial live probe inherited its private fixture `umask 077` into deployment, causing copied asset/manifest modes to produce a mismatched fingerprint; the existing verifier refused it. Redeploying with standard `umask 022` corrected that smoke procedure without modifying integration code or weakening fingerprint checks.
+
+An authored inert numeric manifest with the same verbatim long literal was temporarily added to the real user plugin directory. The **installed** current local helper, using actual running-shell IPC and discovery rather than harness transport/state, completed in **568 ms**, returning `ok:true` with **42 rows**, numeric ID `5e-324`, `enabled:false` and `active:false`.
+
+Actual keyboard interaction searched for `5e-324` and opened its detail in the current production browser at **1120×748 logical size**. Visual inspection showed **Inert numeric cost probe**, ID **5e-324**, its local-only state and a disabled Enable control; the browser reported one matching row, `detail:"5e-324"` and `localError:""`. No standalone UI host, synthesized local rows or arbitrary community activation was used. The live numeric fixture was never enabled.
+
+The browser was hidden and the owned numeric directory removed. Final real local inspection returned `ok:true` with **41 rows** and no numeric fixture; the original `shell.json` bytes were preserved and the current runtime fingerprint still verified. Transient JSON parse diagnostics during the removal rescan remained visible; the final observed state converged successfully without hiding them.
+
+No installed Omarchy platform file was modified, no arbitrary third-party code was activated, and no project commit, push or marketplace submission was made. Managed recovery backups remain; this is local Finding 5 remediation evidence, not a new slow-model review or marketplace approval.
+
+Temporary timing drivers, transport/IPC wrappers, isolated HOME/cache/state, authored Git repositories, native Qt probe records, live fixture files and screenshots were removed. The authored browser search/detail interaction was cleared; the current managed runtime and pre-existing recovery backups remain.
+

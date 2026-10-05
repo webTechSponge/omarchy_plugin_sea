@@ -50,6 +50,10 @@ cat >"$tmp/mock/omarchy-shell" <<'MOCK'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$TEST_ROOT/ipc"
 [[ ${TEST_SHELL_FAIL:-0} == 0 ]] || exit 1
+if [[ ${2:-} == call && ${3:-} == webtechsponge.plugin-sea && ${4:-} == activationSource ]]; then
+  jq -n --arg path "$HOME/.config/omarchy/plugins/$5" '{ok:true,scanning:false,firstParty:false,sourceDir:$path}'
+  exit
+fi
 echo ok
 MOCK
 cat >"$tmp/mock/omarchy" <<'MOCK'
@@ -115,6 +119,18 @@ exec 8>"$XDG_CACHE_HOME/oma_plug_sea/catalog.lock"
 flock -n 8
 "$cat_helper" refresh >"$tmp/out"
 assert "$tmp/out" '.ok and .stale and (.error|contains("Another"))' 'concurrent catalog refresh retains saved data'
+"$cat_helper" verify >"$tmp/out"
+assert "$tmp/out" '.ok and (.stale|not) and (.plugins|length)==3' 'fresh verification does not acquire the refresh lock'
+cmp "$tmp/good" "$XDG_CACHE_HOME/oma_plug_sea/catalog.json"
+TEST_NETWORK_FAIL=1 "$cat_helper" verify >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.plugins|length)==0' 'verification transport failure never authorizes saved listings'
+TEST_CATALOG="$tmp/poll-invalid" "$cat_helper" verify >"$tmp/out"
+assert "$tmp/out" '.ok==false and .stale and (.plugins|length)==0' 'verification normalization failure never authorizes saved listings'
+cmp "$tmp/good" "$XDG_CACHE_HOME/oma_plug_sea/catalog.json"
+XDG_CACHE_HOME="$tmp/verify-only" "$cat_helper" verify >"$tmp/out"
+assert "$tmp/out" '.ok and (.stale|not)' 'fresh verification needs no browsing cache'
+[[ ! -e $tmp/verify-only ]]
+pass=$((pass+1))
 flock -u 8
 printf '{broken' >"$tmp/broken"
 TEST_CATALOG="$tmp/broken" "$cat_helper" refresh >"$tmp/out"
@@ -162,21 +178,21 @@ jq '.plugins[0] |= (. + {installAvailable:true,repo:"https://github.com/test/wea
 assert "$tmp/out" '.ok and .plugins[0].installAvailable' 'missing optional status preserves listing availability'
 printf '[{"id":"test.linked","name":"Linked","enabled":false}]' >"$tmp/local.json"
 mkdir -p "$HOME/.config/omarchy/plugins/test.linked"
-printf '{"version":"9.9","description":"decoy"}' >"$tmp/decoy.json"
+printf '{"schemaVersion":1,"id":"test.linked","name":"Decoy","version":"9.9","description":"decoy","kinds":["panel"],"entryPoints":{"panel":"Fixture.qml"}}' >"$tmp/decoy.json"
 ln -sf "$tmp/decoy.json" "$HOME/.config/omarchy/plugins/test.linked/manifest.json"
 "$local_helper" >"$tmp/out"
 assert "$tmp/out" '.ok and ([.plugins[]|select(.id=="test.linked")]|length)==1 and all(.plugins[];select(.id=="test.linked")|.version=="" and .localPath=="")' 'symlinked manifest contributes no metadata'
 rm -rf -- "$HOME/.config/omarchy/plugins/test.linked"
 printf '[{"id":"test.gitlink","name":"GitLink","enabled":false}]' >"$tmp/local.json"
 mkdir -p "$HOME/.config/omarchy/plugins/test.gitlink" "$tmp/decoy-git"
-printf '{"version":"1.0"}' >"$HOME/.config/omarchy/plugins/test.gitlink/manifest.json"
+printf '{"schemaVersion":1,"id":"test.gitlink","name":"GitLink","version":"1.0","kinds":["panel"],"entryPoints":{"panel":"Fixture.qml"}}' >"$HOME/.config/omarchy/plugins/test.gitlink/manifest.json"
 ln -s "$tmp/decoy-git" "$HOME/.config/omarchy/plugins/test.gitlink/.git"
 "$local_helper" >"$tmp/out"
 assert "$tmp/out" '.ok and all(.plugins[];select(.id=="test.gitlink")|.version=="" and .localPath=="")' 'symlinked .git contributes no metadata'
 rm -rf -- "$HOME/.config/omarchy/plugins/test.gitlink"
 printf '[{"id":"test.dirlink","name":"DirLink","enabled":false}]' >"$tmp/local.json"
 mkdir -p "$tmp/decoy-dir"
-printf '{"version":"9.9","description":"decoy"}' >"$tmp/decoy-dir/manifest.json"
+printf '{"schemaVersion":1,"id":"test.dirlink","name":"DirLink","version":"9.9","description":"decoy","kinds":["panel"],"entryPoints":{"panel":"Fixture.qml"}}' >"$tmp/decoy-dir/manifest.json"
 ln -s "$tmp/decoy-dir" "$HOME/.config/omarchy/plugins/test.dirlink"
 "$local_helper" >"$tmp/out"
 assert "$tmp/out" '.ok and all(.plugins[];select(.id=="test.dirlink")|.version=="" and .localPath=="")' 'symlinked plugin dir contributes no metadata'

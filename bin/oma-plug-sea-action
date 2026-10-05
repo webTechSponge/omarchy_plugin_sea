@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$ROOT/lib/git-provenance.sh"
+source "$ROOT/lib/plugin-discovery.sh"
 action=${1:-}; id=${2:-}; source_url=''; sha=''; consent=''; staging=''
 shift "$(( $# >= 2 ? 2 : $# ))"
 umask 077
@@ -75,7 +76,7 @@ catalog_match() {
     (( (8#$mode & 0022) == 0 )) || return 1
   fi
   [[ ! -L $cache/catalog.json ]] || return 1
-  timeout --kill-after=5 90 "$ROOT/bin/oma-plug-sea-catalog" refresh >"$tmp/catalog" 2>>"$tmp/stderr" || return 1
+  timeout --kill-after=5 90 "$ROOT/bin/oma-plug-sea-catalog" verify >"$tmp/catalog" 2>>"$tmp/stderr" || return 1
   jq -e --arg id "$id" --arg repo "$source_url" --arg sha "$sha" '
     .ok==true and .stale==false and
     ([.plugins[] | select(.id==$id)] | length)==1 and
@@ -86,11 +87,11 @@ catalog_match() {
 }
 no_install_collision() {
   [[ ! -e $path && ! -L $path ]] || return 1
-  jq -e --arg id "$id" 'all(.[]; .id!=$id)' "$tmp/plugins" >/dev/null || return 1
-  # Use the platform's static discovery rules, including unrelated development
-  # symlinks, without importing their code or treating them as install targets.
-  timeout --kill-after=5 15 omarchy plugin catalog >"$tmp/discovered" 2>>"$tmp/stderr" || return 1
-  jq -e --arg id "$id" 'type=="array" and all(.[]; .id!=$id)' "$tmp/discovered" >/dev/null
+  # Raw registry candidates include development links before deduplication.
+  # Static catalog rejects registry-valid numeric IDs; it is not an ID oracle.
+  sea_candidates_for_id "$plugins_dir" "$id" >"$tmp/raw-discovered"
+  jq -se 'length==0' "$tmp/raw-discovered" >/dev/null || return 1
+  jq -e --arg id "$id" 'all(.[]; .id!=$id)' "$tmp/plugins" >/dev/null
 }
 no_dormant_references() {
   safe_config || return 1
@@ -104,10 +105,28 @@ no_dormant_references() {
     all(.[]; . as $id | any($installed[0][]; .id==$id))
   ' "$config" >/dev/null
 }
+shell_source_matches() {
+  timeout --kill-after=2 12 omarchy-shell shell call webtechsponge.plugin-sea activationSource "$id" >"$tmp/activation-source" 2>>"$tmp/stderr" &&
+    jq -e --arg path "$path" '.ok==true and .scanning==false and .firstParty==false and .sourceDir==$path' "$tmp/activation-source" >/dev/null
+}
+refresh_activation_source() {
+  local attempt
+  sea_unique_source "$plugins_dir" "$id" "$path" || return 1
+  shell_source_matches && return 0
+  run omarchy-shell shell rescanPlugins || return 1
+  for attempt in {1..20}; do
+    shell_source_matches && return 0
+    sleep 0.1
+  done
+  return 1
+}
 verify_community() {
-  catalog_match && sea_verify "$path" "$id" "$source_url" "$sha" 2>>"$tmp/stderr" &&
+  sea_unique_source "$plugins_dir" "$id" "$path" &&
+    refresh_activation_source &&
+    catalog_match && sea_verify "$path" "$id" "$source_url" "$sha" 2>>"$tmp/stderr" &&
     run omarchy plugin validate "$path" &&
-    sea_verify "$path" "$id" "$source_url" "$sha" 2>>"$tmp/stderr"
+    sea_verify "$path" "$id" "$source_url" "$sha" 2>>"$tmp/stderr" &&
+    sea_unique_source "$plugins_dir" "$id" "$path" && shell_source_matches
 }
 refresh_local || finish false 'Cannot inspect plugin state; ensure omarchy-shell is running.'
 installed=$(jq -c --arg id "$id" '[.[]|select(.id==$id)][0]//null' "$tmp/plugins")
@@ -119,7 +138,6 @@ case $action in
     catalog_match || finish false 'The selected reviewed snapshot is not currently eligible in a fresh catalog. Refresh and review again.' ;;
   *)
     [[ $installed != null ]] || finish false 'The plugin disappeared or is not installed. Refresh local state.'
-    [[ $(jq --arg id "$id" '[.[]|select(.id==$id)]|length' "$tmp/plugins") == 1 ]] || finish false 'Duplicate installed plugin IDs are ambiguous.'
     if [[ $action == enable ]]; then
       if jq -e '.firstParty==true' <<<"$installed" >/dev/null; then
         [[ -z $source_url ]] || finish false 'First-party enable does not accept a community snapshot.'

@@ -7,7 +7,7 @@ sea_git() {
     GIT_NO_REPLACE_OBJECTS=1 git -c core.hooksPath=/dev/null \
     -c protocol.allow=never -c protocol.https.allow=always -c protocol.file.allow=never \
     -c core.fsmonitor=false -c core.untrackedCache=false -c core.filemode=true \
-    -c core.ignoreStat=false -c core.trustctime=true "$@"
+    -c core.ignoreStat=false -c core.trustctime=true -c core.ignorecase=false "$@"
 }
 sea_valid_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && $1 != *..* ]]; }
 # All existing components must be real directories owned by this user or root,

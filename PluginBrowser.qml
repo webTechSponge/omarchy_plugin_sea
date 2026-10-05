@@ -84,6 +84,17 @@ Item {
     }
     function status(arg) { return JSON.stringify({runtimeFingerprint:runtimeFingerprint, opened:opened, search:query, category:category, scope:scope, sort:sort, sortDirection:sortDirection, count:filtered.length, selected:grid.currentIndex, detail:detail ? detail.id : null, preview:previewSource, previewReady:imageViewer.item ? imageViewer.item.ready : false, previewWidth:imageViewer.item ? imageViewer.item.intrinsicWidth : 0, previewHeight:imageViewer.item ? imageViewer.item.intrinsicHeight : 0, previewZoom:imageViewer.item ? imageViewer.item.effectiveZoom : 0, consent:pendingAction, busy:busy, stale:stale, refreshing:refreshing, refreshNeeded:refreshNeeded, checking:checking, checkError:checkError, checkedAt:checkedAt, lastCheckedAt:checkedAt, catalogError:catalogError, localError:localError, width:surface.width, height:surface.height, operationMessage:operationMessage}); }
     function close() { previewSource = ""; opened = false; }
+    // Supported shell IPC bridge: inspect the already-selected manifest without
+    // loading target code. Filesystem uniqueness alone cannot identify a stale
+    // registry winner. Community actions fail closed while a scan is pending.
+    function activationSource(id) {
+        var registry = pluginRegistry;
+        var selected = registry && !registry.scanning ? registry.installedPlugins[String(id)] : null;
+        return JSON.stringify({ok: !!selected && !!selected.__sourceDir,
+            scanning: !registry || !!registry.scanning,
+            sourceDir: selected ? selected.__sourceDir || "" : "",
+            firstParty: selected ? !!selected.__isFirstParty : false});
+    }
     function dismiss() {
         if (busy) { operationMessage = "Please wait for the current action to finish."; return; }
         previewSource = "";

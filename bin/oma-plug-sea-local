@@ -3,6 +3,7 @@ set -euo pipefail
 # Shell discovery is authoritative for enabled/active state. Read manifests only as metadata.
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$ROOT/lib/git-provenance.sh"
+source "$ROOT/lib/plugin-discovery.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 if ! timeout 12 omarchy plugin list --json >"$tmp/local" 2>"$tmp/errors" || ! jq -e 'type=="array" and all(.[]; (.id|type)=="string" and (.enabled|type)=="boolean")' "$tmp/local" >/dev/null 2>&1; then
@@ -12,6 +13,18 @@ fi
 while IFS= read -r id; do
   [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || continue
   path="$HOME/.config/omarchy/plugins/$id"
+  [[ ! -L $path && ! -L $path/manifest.json && ! -L $path/.git ]] || continue
+  [[ -f $path/manifest.json ]] || continue
+  # Shell rows omit sourceDir. Never attach canonical provenance when raw
+  # discovery could select another directory (including a development link).
+  # Reuse identities only inside this observation, after metadata eligibility.
+  # Backend activation checks still rediscover the source immediately.
+  [[ -f $tmp/raw-candidates ]] ||
+    sea_raw_candidates "$HOME/.config/omarchy/plugins" >"$tmp/raw-candidates"
+  sea_unique_candidates "$id" "$path" <"$tmp/raw-candidates" || continue
+  timeout --kill-after=2 12 omarchy-shell shell call webtechsponge.plugin-sea activationSource "$id" >"$tmp/source" 2>/dev/null &&
+    jq -e --arg path "$path" '.ok==true and .scanning==false and .firstParty==false and .sourceDir==$path' "$tmp/source" >/dev/null || continue
+  # Recheck cheap path guards after discovery and selected-source inspection.
   [[ ! -L $path && ! -L $path/manifest.json && ! -L $path/.git ]] || continue
   [[ -f $path/manifest.json ]] || continue
   git_managed=false
@@ -28,5 +41,5 @@ while IFS= read -r id; do
     fi
   fi
   jq -c --arg id "$id" --arg path "$path" --arg repo "$repo" --arg headCommit "$sea_head" --argjson detached "$sea_detached" --argjson clean "$sea_clean" --argjson gitManaged "$git_managed" '{id:$id,version:(.version//""),description:(.description//""),repo:$repo,gitManaged:$gitManaged,headCommit:$headCommit,detached:$detached,clean:$clean,localPath:$path,defaultSection:(.barWidget.defaultSection//"center")}' "$path/manifest.json" >>"$tmp/metadata" 2>/dev/null || true
-done < <(jq -r '.[].id' "$tmp/local")
+done < <(jq -r '.[] | select(.firstParty!=true) | .id' "$tmp/local")
 jq -n --slurpfile local "$tmp/local" --slurpfile meta "$tmp/metadata" '{ok:true,error:"",plugins:[$local[0][] | . as $p | ({version:"",repo:"",gitManaged:false,headCommit:"",detached:false,clean:false,localPath:"",defaultSection:"center"} + . + ([$meta[]|select(.id==$p.id)][0]//{}))]}'

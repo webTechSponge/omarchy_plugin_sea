@@ -4,11 +4,13 @@
 
 Keep in-app installation, including Install & enable, but install only the exact marketplace-verified listing snapshot. Remove in-app updates to mutable upstream HEAD. Continue using Omarchy for static validation, discovery, enable, disable, and removal.
 
-Implementation and local runtime proof are complete; see [verification evidence](verification.md#immutable-snapshot-installation--2026-10-04). This document retains the agreed design and resubmission checklist. No installed Omarchy scripts were modified, no package dependency was added, and no push or marketplace submission was made.
+Initial implementation and local runtime proof are recorded in [verification evidence](verification.md#immutable-snapshot-installation--2026-10-04). The subsequent [post-commit review](immutable-install-review.md) found two P1 enable-verification bypasses and one P2 catalog-freshness regression; all three are remediated with [post-fix evidence](verification.md#immutable-install-review-remediation--2026-10-04). These follow-up changes are not marketplace-approved. This document retains the agreed design and resubmission checklist. No installed Omarchy scripts were modified, no runtime package dependency was added, and no push or marketplace submission was made.
+
+Slow-model re-review confirmed closure of the original three findings and identified a [P2 numeric-ID matching regression](immutable-install-review.md#finding-4--p2-numeric-comparison-conflates-distinct-registry-ids). Finding 4's identity fix is now also closed by slow-model re-review, with [native formatting, real consumer and rendered-UI evidence](verification.md#numeric-manifest-identity-remediation--2026-10-05). That review found a new [P2 repeated numeric-conversion performance regression](immutable-install-review.md#finding-5--p2-repeated-numeric-conversion-blocks-local-inspection-and-actions); Finding 5 is now remediated with [bounded timing, exact conversion and successful consumer evidence](verification.md#numeric-discovery-cost-remediation--2026-10-05). No new slow-model re-review or marketplace approval is claimed.
 
 The marketplace submission [#5215](https://github.com/omacom/omarchy-plugin-marketplace/issues/5215) was closed on September 22, 2026. Its [September 14 review](https://github.com/omacom/omarchy-plugin-marketplace/issues/5215#issuecomment-5672438941) requires a full reviewed commit SHA, detached checkout of that object, verification before enable, and either reviewed immutable updates or external manual updates.
 
-## Observed constraints
+## Planning baseline before the initial implementation
 
 - `bin/oma-plug-sea-action` currently hands installation to `omarchy plugin add` and updates to `omarchy plugin update`. Neither installed CLI interface accepts an exact SHA.
 - `lib/normalize.jq` already preserves `listingValidatedCommit`, `verificationSnapshotStatus`, `verificationCoverage`, and `verificationStatus`. The action protocol does not receive a revision.
@@ -42,7 +44,7 @@ New install protocol:
 `install|install-enable ID REPOSITORY FULL_SHA --consent-unsandboxed`
 
 - Preserve bounded commands, JSON result envelopes, argument arrays, canonical-source checks, serialized mutations, shell.json backups, and explicit unsandboxed consent.
-- Refresh/revalidate the catalog through the existing helper before installation. Require the current entry to match the consented ID, repository, and SHA and still satisfy eligibility. A changed listing requires new consent; do not silently substitute a revision.
+- Fetch/revalidate fresh catalog evidence through the existing helper's nonpersisting `verify` mode before installation. Do not advance the displayed catalog's cache or polling baseline during action validation. Require the current entry to match the consented ID, repository, and SHA and still satisfy eligibility. A changed listing requires new consent; do not silently substitute a revision.
 - Validate ownership and reject symlinked state/plugin directory components before writing. Lock acquisition must not follow an attacker-supplied symlink.
 - Create a private hidden staging container inside `~/.config/omarchy/plugins`; place the checkout inside it. Keep it excluded from both discovery paths throughout preparation.
 - Use a controlled Git configuration and empty template/hook setup for initialization, fetch, and checkout. Do not execute repository hooks, recurse into submodules, or inherit executable checkout filters. Preserve source/transport restrictions throughout the operation.
@@ -63,7 +65,10 @@ Files: `bin/oma-plug-sea-local`, `bin/oma-plug-sea-action`, `js/CatalogModel.js`
 - Expose observed local Git revision, detached/clean state, and supported origin as provenance metadata using the existing local-state envelope.
 - Add the same pre-enable verification to Install & enable and the standalone Enable action. Passing only the initial install check leaves a bypass after external modifications.
 - For community code enabled through this app, bind consent to the eligible catalog snapshot and require matching repository, manifest ID, detached HEAD, and clean checkout immediately before invoking Omarchy enable.
-- Detect modified tracked files and additional untracked/ignored content that could change executed code; HEAD equality alone is insufficient. Keep generated preview caches outside the checkout as they are now.
+- Require exactly one raw discovered manifest ID at the verified canonical directory before deduplication, and inspect the running shell registry's selected source through the loaded browser's `activationSource(ID)` IPC bridge. Do not infer uniqueness from either shell list or static catalog rows. Unavailable/scanning/mismatched source inspection cannot authorize enable; stale selection must be rescanned and explicitly observed to match.
+- Canonicalize numeric manifest IDs to the registry's JavaScript string identity, including binary64 rounding and number spelling, before exact comparison with the requested string. Never parse the request numerically: numeric `1000` duplicates `"1000"` but not `"1e3"`; numeric `1` is distinct from `"01"`. Preserve recursive singleton-array identity coercion. Use raw candidates and shell rows for installation collision checks, not the static catalog's narrower numeric-ID policy. No production Node dependency.
+- Bound exact numeric conversion work and avoid repeating it for metadata-ineligible rows. Within a local observation only, reuse one private raw-identity snapshot after canonical-manifest/path eligibility checks. Do not persist or treat that snapshot as activation authority: every action-level source/content check remains fresh. Prove ordinary-row latency with a bounded throwaway timing scenario and retain deterministic successful consumer/recovery and fresh-observation regressions.
+- Detect modified tracked files and additional untracked/ignored content that could change executed code; HEAD equality alone is insufficient. Force case-sensitive Git enumeration so local `core.ignorecase=true` cannot hide distinct `Extra.qml`/`extra.qml` paths. Keep generated preview caches outside the checkout as they are now.
 - Do not reset or delete user edits to make enable pass. Refuse with an explanation and leave disable/remove available.
 - Preserve first-party platform enable behavior. Local-only, unknown-origin, unmatched, or manually modified community installs cannot be enabled through this reviewed-snapshot path; users may manage them explicitly outside the app.
 - No installation receipt is treated as verification authority. An older installed commit no longer matching the current eligible listing cannot be re-enabled through the app without restoring/installing the current eligible snapshot or external management.
@@ -101,6 +106,9 @@ Update broken action/eligibility contracts and remove tests that merely preserve
 6. Tampering between install and standalone enable: altered revision, origin, tracked content, or extra executable files prevent enable.
 7. Publication/rescan/enable failure: accurate final-state reporting; unrelated files/configuration survive.
 8. Obsolete direct update request: no code/network mutation.
+9. Canonical reviewed A plus a duplicate discovered source: both enable paths refuse without activating the shadow. Use the installed registry's actual source-selection functions, not a canonical-directory activation assumption; include stale registry selection and unrelated development symlinks.
+10. Tracked `Extra.qml`, distinct untracked `extra.qml`, and local `core.ignorecase=true`: observation is not clean and both enable paths refuse without repairing or deleting edits.
+11. Displayed catalog A/server B: refused and successful actions preserve the unseen-change notification; explicit refresh to B reconciles model and polling baseline, while pending consent keeps its original revision.
 
 Use actual Git repositories and the real platform validator for the A/B scenario. Keep HOME, Git config, cache/state, and fixtures isolated. Where shell IPC is simulated, report that limit; test enable refusal through observable state and execution sentinels, not mocked forwarding assertions.
 
